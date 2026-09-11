@@ -1,0 +1,425 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../prisma/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum SkillLevel {
+  NEWBIE
+  BEGINNER
+  INTERMEDIATE
+  ADVANCE
+}
+
+enum SportType {
+  BADMINTON
+  PADEL
+  TENNIS
+  TABLE_TENNIS
+  PICKLEBALL
+  CUSTOM
+}
+
+enum ScoringType {
+  OFF
+  WINS
+  SCORE_DIFF
+}
+
+enum MatchMakingType {
+  CUSTOM
+  LOOSE_SOCIAL
+  SKILL_STRICT
+  BALANCED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  MAX
+}
+
+enum GenderPreferenceType {
+  OFF
+  PREFER_MIXED
+  PREFER_SAME_GENDER
+}
+
+enum MatchMakingMode {
+  BALANCED
+  RANDOM
+  SKILL_BASED
+}
+
+enum LateJoinerPolicy {
+  EQUAL_PLAY_CATCHUP
+  SESSION_AVERAGE
+  MIN_SESSION_PLAY
+}
+
+enum SessionsType {
+  OPEN_PLAY
+  TOURNAMENT
+}
+
+enum RoleType {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum GenderType {
+  MALE
+  FEMALE
+}
+
+enum PlayerStatus {
+  NOT_ARRIVED
+  WAITING
+  RESERVED
+  RESTING
+  PLAYING
+  LEFT
+}
+
+enum CourtStatus {
+  AVAILABLE
+  IN_USE
+  BLOCKED
+}
+
+enum MatchStatus {
+  QUEUED
+  READY
+  PLAYING
+  FINISHED
+  CANCELLED
+}
+
+enum GenerateType {
+  AUTO
+  MANUAL
+}
+
+enum TeamGroup {
+  TEAM_A
+  TEAM_B
+}
+
+enum SessionStatus {
+  ACTIVE
+  FINISHED
+  DRAFT
+  ARCHIVED
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id         Int        @id @default(autoincrement())
+  name       String?    @db.VarChar(250)
+  username   String?    @db.VarChar(100)
+  isVerified Boolean    @default(false)
+  email      String?    @unique
+  gender     GenderType
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  authAccounts    AuthAccount[]
+  refreshSessions RefreshSession[]
+  ownedClubs      SportClub[]
+  clubMembers     ClubMember[]
+}
+
+model AuthAccount {
+  id                Int     @id @default(autoincrement())
+  userId            Int
+  provider          String  @db.VarChar(100)
+  providerAccountId String? @db.VarChar(250)
+  passwordHash      String? @db.VarChar(250)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshSession {
+  id          Int    @id @default(autoincrement())
+  userId      Int
+  hashedToken String @db.VarChar(500)
+  deviceName  String @db.VarChar(100)
+  ipAddress   String @db.VarChar(100)
+  userAgent   String @db.VarChar(500)
+
+  expiredAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SportClub {
+  id      Int    @id @default(autoincrement())
+  ownerId Int
+  name    String @unique @db.VarChar(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner        User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  clubSettings ClubSettings?
+  sessions     SportSession[]
+  members      ClubMember[]
+  courts       Court[]
+}
+
+model ClubSettings {
+  id     Int @id @default(autoincrement())
+  clubId Int @unique
+
+  // GENERAL
+  defaultSport         SportType
+  trackMatchScore      Boolean           @default(true)
+  allowEndWithoutScore Boolean           @default(false)
+  attendanceCheckIn    Boolean           @default(true)
+  lateJoinerPolicy     LateJoinerPolicy?
+  leaderBoardMode      ScoringType
+  queueDepth           Int?
+
+  // MATCHMAKING
+  autoMatchMaking          Boolean         @default(true)
+  matchMakingMode          MatchMakingType @default(BALANCED)
+  equalPlayPriority        PriorityLevel   @default(MEDIUM)
+  balancedTeams            PriorityLevel   @default(HIGH)
+  partnerVariety           PriorityLevel   @default(MEDIUM)
+  opponentVariety          PriorityLevel   @default(MEDIUM)
+  prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
+  minimumRestTime          Int?
+
+  carryBalance     PriorityLevel         @default(LOW)
+  carryEvaluation  PriorityLevel         @default(LOW)
+  genderPreference GenderPreferenceType?
+
+  fairnessThreshold Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club SportClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+}
+
+model SportSession {
+  id          Int           @id @default(autoincrement())
+  clubId      Int
+  title       String?       @db.VarChar(250)
+  status      SessionStatus @default(DRAFT)
+  description String?
+  type        SessionsType  @default(OPEN_PLAY)
+
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  endedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club            SportClub           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sessionSettings SessionSettings?
+  players         SessionPlayer[]
+  matches         SessionMatch[]
+  sessionCourts   SessionCourt[]
+  stats           SessionPlayerStat[]
+  createdMembers  ClubMember[]
+}
+
+model SessionSettings {
+  id        Int @id @default(autoincrement())
+  sessionId Int @unique
+
+  // GENERAL
+  defaultSport         SportType
+  trackMatchScore      Boolean           @default(true)
+  allowEndWithoutScore Boolean           @default(false)
+  attendanceCheckIn    Boolean           @default(true)
+  lateJoinerPolicy     LateJoinerPolicy?
+  leaderBoardMode      ScoringType
+  queueDepth           Int?
+
+  // MATCHMAKING
+  autoMatchMaking          Boolean         @default(true)
+  matchMakingMode          MatchMakingType @default(BALANCED)
+  equalPlayPriority        PriorityLevel   @default(MEDIUM)
+  balancedTeams            PriorityLevel   @default(HIGH)
+  partnerVariety           PriorityLevel   @default(MEDIUM)
+  opponentVariety          PriorityLevel   @default(MEDIUM)
+  prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
+  minimumRestTime          Int?
+
+  carryBalance     PriorityLevel         @default(LOW)
+  carryEvaluation  PriorityLevel         @default(LOW)
+  genderPreference GenderPreferenceType?
+
+  fairnessThreshold Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session SportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model ClubMember {
+  id          Int         @id @default(autoincrement())
+  clubId      Int?
+  userId      Int?
+  displayName String?     @db.VarChar(100)
+  role        RoleType    @default(MEMBER)
+  gender      GenderType?
+  skillLevel  SkillLevel  @default(BEGINNER)
+
+  isGuest            Boolean @default(false)
+  createdBySessionId Int?
+
+  joinedAt DateTime @default(now())
+
+  club    SportClub?    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user    User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session SportSession? @relation(fields: [createdBySessionId], references: [id], onDelete: SetNull)
+
+  sessionPlayers   SessionPlayer[]
+  submittedResults MatchResult[]   @relation("SubmittedBy")
+
+  @@unique([clubId, userId])
+  @@index([clubId, skillLevel])
+}
+
+model SessionPlayer {
+  id           Int          @id @default(autoincrement())
+  sessionId    Int
+  clubMemberId Int
+  playCount    Int?
+  restCount    Int?
+  status       PlayerStatus @default(NOT_ARRIVED)
+
+  checkedInAt         DateTime?
+  lastMatchFinishedAt DateTime?
+  restUntil           DateTime?
+
+  session    SportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  clubMember ClubMember   @relation(fields: [clubMemberId], references: [id], onDelete: Restrict)
+
+  matchPlayers MatchPlayer[]
+  stats        SessionPlayerStat?
+
+  @@unique([sessionId, clubMemberId])
+  @@index([sessionId, status])
+}
+
+model Court {
+  id           Int     @id @default(autoincrement())
+  clubId       Int
+  name         String  @db.VarChar(100)
+  displayOrder Int?
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club          SportClub      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sessionCourts SessionCourt[]
+}
+
+model SessionCourt {
+  id        Int         @id @default(autoincrement())
+  sessionId Int
+  courtId   Int
+  status    CourtStatus @default(AVAILABLE)
+
+  session SportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  court   Court        @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  matches SessionMatch[]
+
+  @@unique([sessionId, courtId])
+  @@index([sessionId, status])
+}
+
+model SessionMatch {
+  id             Int          @id @default(autoincrement())
+  sessionId      Int
+  sessionCourtId Int?
+  sequence       Int
+  status         MatchStatus  @default(QUEUED)
+  generatedBy    GenerateType @default(AUTO)
+
+  assignedAt DateTime?
+  startedAt  DateTime?
+  endedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session SportSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  court   SessionCourt? @relation(fields: [sessionCourtId], references: [id], onDelete: SetNull)
+
+  players MatchPlayer[]
+  result  MatchResult?
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, status])
+}
+
+model MatchPlayer {
+  id              Int       @id @default(autoincrement())
+  matchId         Int
+  sessionPlayerId Int
+  team            TeamGroup
+  position        Int
+
+  match         SessionMatch? @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sessionPlayer SessionPlayer @relation(fields: [sessionPlayerId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, sessionPlayerId])
+  @@unique([matchId, team, position])
+}
+
+model MatchResult {
+  id      Int @id @default(autoincrement())
+  matchId Int @unique
+
+  winningTeam TeamGroup?
+  scoreTeamA  Int?
+  scoreTeamB  Int?
+  notes       String?
+
+  submittedByAdminId Int
+
+  match SessionMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  admin ClubMember   @relation("SubmittedBy", fields: [submittedByAdminId], references: [id], onDelete: Restrict)
+}
+
+model SessionPlayerStat {
+  id              Int @id @default(autoincrement())
+  sessionId       Int
+  sessionPlayerId Int @unique
+
+  matchesPlayed Int @default(0)
+  matchesWon    Int @default(0)
+  matchesLoss   Int @default(0)
+  matchesDrawn  Int @default(0)
+
+  pointsScored   Int @default(0)
+  pointsConceded Int @default(0)
+  totalPoints    Int @default(0)
+
+  session       SportSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionPlayer SessionPlayer @relation(fields: [sessionPlayerId], references: [id], onDelete: Cascade)
+}

@@ -4,6 +4,7 @@ import { AppService } from './app.service.js';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env/env.config.js';
 import { EnvConfigModule } from './config/env/env.module.js';
+import { PrismaModule } from './config/prisma/prisma.module.js';
 
 @Module({
   imports: [ConfigModule.forRoot(
@@ -12,7 +13,7 @@ import { EnvConfigModule } from './config/env/env.module.js';
       isGlobal: true,
       validate: validateEnv
     },
-  ), EnvConfigModule],
+  ), EnvConfigModule, PrismaModule],
   controllers: [AppController],
   providers: [AppService],
 })
