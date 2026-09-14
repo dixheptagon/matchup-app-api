@@ -6,10 +6,17 @@ export const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().default(8000),
   URL: z.string(),
-  DATABASE_URL: z.string(),
   DB_USER: z.string(),
   DB_PASSWORD: z.string(),
   DB_NAME: z.string(),
+  DATABASE_URL: z.string(),
+  GOOGLE_CLIENT_ID: z.string(),
+  GOOGLE_CLIENT_SECRET: z.string(),
+  GOOGLE_CALLBACK_URL: z.string(),
+  JWT_ACCESS_SECRET: z.string(),
+  JWT_REFRESH_SECRET: z.string(),
+  JWT_ACCESS_EXPIRATION: z.string(),
+  JWT_REFRESH_EXPIRATION: z.string(),
 });
 
 export type ENV = z.infer<typeof envSchema>;

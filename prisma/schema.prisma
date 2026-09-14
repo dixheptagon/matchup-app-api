@@ -153,6 +153,8 @@ model AuthAccount {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
 model RefreshSession {
@@ -168,6 +170,10 @@ model RefreshSession {
   revokedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([hashedToken])
+  @@index([hashedToken])
+  @@index([userId])
 }
 
 model SportClub {
