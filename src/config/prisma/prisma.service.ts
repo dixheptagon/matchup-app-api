@@ -1,7 +1,7 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { PrismaClient } from "../../../prisma/generated/prisma/client.js";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { EnvConfigService } from "../env/env.service.js";
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { EnvConfigService } from '../env/env.service.js';
+import { PrismaClient } from '../../../prisma/generated/prisma/client.js';
 
 @Injectable()
 export class PrismaService
@@ -10,14 +10,14 @@ export class PrismaService
 {
   constructor(private readonly envConfig: EnvConfigService) {
     const adapter = new PrismaPg({
-      connectionString: envConfig.get("DATABASE_URL"),
+      connectionString: envConfig.get('DATABASE_URL'),
     });
 
     super({
       adapter,
       log: envConfig.isDevelopment
-        ? ["query", "info", "warn", "error"]
-        : ["error"],
+        ? ['query', 'info', 'warn', 'error']
+        : ['error'],
     });
   }
 

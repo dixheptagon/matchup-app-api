@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "categories": {
+    "correctness": "warn"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "off",
+    "typescript/no-floating-promises": "warn",
+    "typescript/no-import-type-side-effects": "warn",
+    "vitest/consistent-test-it": "warn",
+    "vitest/consistent-test-filename": "warn"
+  }
+}

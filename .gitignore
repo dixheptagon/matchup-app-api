@@ -66,3 +66,7 @@ dist/
 /.windsurf
 skills-lock.json
 *.tsbuildinfo
+
+# Vitest reports and artifacts
+.vitest/
+
