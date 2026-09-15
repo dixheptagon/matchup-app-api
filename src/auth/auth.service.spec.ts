@@ -143,7 +143,6 @@ describe('AuthService', () => {
           name: newGoogleProfile.displayName,
           email: newGoogleProfile.email,
           isVerified: true,
-          gender: 'MALE',
           authAccounts: {
             create: {
               provider: 'google',
@@ -310,7 +309,9 @@ describe('AuthService', () => {
       const profileData = {
         id: mockUser.id,
         name: mockUser.name,
+        username: mockUser.username,
         email: mockUser.email,
+        gender: mockUser.gender,
         isVerified: mockUser.isVerified,
         createdAt: mockUser.createdAt,
       };
@@ -324,7 +325,9 @@ describe('AuthService', () => {
         select: {
           id: true,
           name: true,
+          username: true,
           email: true,
+          gender: true,
           isVerified: true,
           createdAt: true,
         },

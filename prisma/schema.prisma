@@ -130,7 +130,7 @@ model User {
   username   String?    @db.VarChar(100)
   isVerified Boolean    @default(false)
   email      String?    @unique
-  gender     GenderType
+  gender     GenderType?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

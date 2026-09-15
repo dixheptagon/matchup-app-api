@@ -53,7 +53,6 @@ export class AuthService {
         name: profile.displayName,
         email: profile.email,
         isVerified: !!profile.email,
-        gender: 'MALE',
         authAccounts: {
           create: {
             provider: 'google',
@@ -139,13 +138,15 @@ export class AuthService {
 
   async getProfile(
     userId: number,
-  ): Promise<Pick<User, 'id' | 'name' | 'email' | 'isVerified' | 'createdAt'>> {
+  ): Promise<Pick<User, 'id' | 'name' | 'username' | 'email' | 'gender' | 'isVerified' | 'createdAt'>> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         name: true,
+        username: true,
         email: true,
+        gender: true,
         isVerified: true,
         createdAt: true,
       },
