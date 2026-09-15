@@ -164,7 +164,10 @@ describe('AuthService', () => {
 
       mockPrisma.authAccount.findFirst.mockResolvedValue(null);
       mockPrisma.user.findUnique.mockResolvedValue(null);
-      mockPrisma.user.create.mockResolvedValue({ ...mockUser, isVerified: false });
+      mockPrisma.user.create.mockResolvedValue({
+        ...mockUser,
+        isVerified: false,
+      });
 
       await service.validateGoogleUser(profileNoEmail);
 
@@ -201,7 +204,9 @@ describe('AuthService', () => {
     it('should call tokenService.signRefreshToken with userId', async () => {
       await service.generateTokens(mockUser, mockMetadata);
 
-      expect(mockTokenService.signRefreshToken).toHaveBeenCalledWith(mockUser.id);
+      expect(mockTokenService.signRefreshToken).toHaveBeenCalledWith(
+        mockUser.id,
+      );
     });
 
     it('should call tokenService.createRefreshSession with correct args', async () => {
@@ -224,7 +229,10 @@ describe('AuthService', () => {
       mockTokenService.signAccessToken.mockReturnValue('new-access-token');
       mockTokenService.signRefreshToken.mockReturnValue('new-refresh-token');
 
-      const result = await service.refreshTokens('old-refresh-token', mockMetadata);
+      const result = await service.refreshTokens(
+        'old-refresh-token',
+        mockMetadata,
+      );
 
       expect(result).toEqual({
         accessToken: 'new-access-token',
@@ -246,7 +254,9 @@ describe('AuthService', () => {
 
       await service.refreshTokens('old-refresh-token', mockMetadata);
 
-      expect(mockTokenService.revokeRefreshSession).toHaveBeenCalledWith('old-refresh-token');
+      expect(mockTokenService.revokeRefreshSession).toHaveBeenCalledWith(
+        'old-refresh-token',
+      );
     });
 
     it('should create new refresh session', async () => {
@@ -300,7 +310,9 @@ describe('AuthService', () => {
     it('should call revokeRefreshSession with the token', async () => {
       await service.logout('refresh-token-to-revoke');
 
-      expect(mockTokenService.revokeRefreshSession).toHaveBeenCalledWith('refresh-token-to-revoke');
+      expect(mockTokenService.revokeRefreshSession).toHaveBeenCalledWith(
+        'refresh-token-to-revoke',
+      );
     });
   });
 
@@ -338,7 +350,9 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException when user not found', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProfile(999)).rejects.toThrow(UnauthorizedException);
+      await expect(service.getProfile(999)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });
