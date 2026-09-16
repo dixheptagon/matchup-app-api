@@ -14,7 +14,7 @@ describe('Users (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    await cleanupTestApp(ctx.prisma);
+    await cleanupTestApp(ctx.prisma, ctx.testUser.id);
     await ctx.app.close();
   });
 

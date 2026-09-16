@@ -7,6 +7,7 @@ import { EnvConfigModule } from './config/env/env.module.js';
 import { PrismaModule } from './config/prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { SportClubsModule } from './sport-clubs/sport-clubs.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AuthModule } from './auth/auth.module.js';
     PrismaModule,
     UsersModule,
     AuthModule,
+    SportClubsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

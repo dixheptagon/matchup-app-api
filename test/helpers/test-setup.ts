@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/config/prisma/prisma.service.js';
 import { TokenService } from '../../src/auth/token.service.js';
@@ -13,13 +14,6 @@ export interface TestContext {
   accessToken: string;
   refreshToken: string;
 }
-
-const TEST_USER = {
-  name: 'E2E Test User',
-  email: `e2e-test-${Date.now()}@example.com`,
-  gender: 'MALE' as const,
-  username: `e2euser-${Date.now()}`,
-};
 
 export async function setupTestApp(): Promise<TestContext> {
   const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -42,12 +36,15 @@ export async function setupTestApp(): Promise<TestContext> {
   const prisma = app.get(PrismaService);
   const tokenService = app.get(TokenService);
 
-  // Clean up any leftover test data
-  await cleanupTestApp(prisma);
-
-  // Create test user
+  // Create test user with unique identifiers
+  const uniqueId = randomUUID().slice(0, 8);
   const testUser = await prisma.user.create({
-    data: TEST_USER,
+    data: {
+      name: 'E2E Test User',
+      email: `e2e-test-${uniqueId}@example.com`,
+      gender: 'MALE',
+      username: `e2euser-${uniqueId}`,
+    },
   });
 
   // Generate tokens
@@ -64,11 +61,21 @@ export async function setupTestApp(): Promise<TestContext> {
   return { app, prisma, tokenService, testUser, accessToken, refreshToken };
 }
 
-export async function cleanupTestApp(prisma: PrismaService): Promise<void> {
-  // Delete refresh sessions first (foreign key constraint)
-  await prisma.refreshSession.deleteMany({});
-  // Delete test users
-  await prisma.user.deleteMany({});
+export async function cleanupTestApp(
+  prisma: PrismaService,
+  userId?: number,
+): Promise<void> {
+  if (userId) {
+    // Targeted cleanup: only delete this test user's data
+    await prisma.refreshSession.deleteMany({ where: { userId } });
+    await prisma.sportClub.deleteMany({ where: { ownerId: userId } });
+    await prisma.user.delete({ where: { id: userId } });
+  } else {
+    // Fallback: clean all (used sparingly)
+    await prisma.refreshSession.deleteMany({});
+    await prisma.sportClub.deleteMany({});
+    await prisma.user.deleteMany({});
+  }
 }
 
 export function authHeader(token: string): Record<string, string> {
