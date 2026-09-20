@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service.js';
 import { PrismaService } from '../config/prisma/prisma.service.js';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -95,15 +99,56 @@ describe('UsersService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('should allow keeping the same username', async () => {
+    it('should throw BadRequestException if new username is same as current', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(existingUser);
-      mockPrisma.user.update.mockResolvedValue(existingUser);
 
-      const result = await service.updateProfile(userId, {
-        username: 'testuser',
+      await expect(
+        service.updateProfile(userId, { username: 'testuser' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException with correct message for same username', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+
+      try {
+        await service.updateProfile(userId, { username: 'testuser' });
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error.message).toBe(
+          'New username must be different from current username',
+        );
+      }
+    });
+
+    it('should update only gender when username not provided', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      mockPrisma.user.update.mockResolvedValue({
+        ...existingUser,
+        gender: 'FEMALE',
       });
 
+      const result = await service.updateProfile(userId, {
+        gender: 'FEMALE',
+      });
+
+      expect(result.gender).toBe('FEMALE');
       expect(result.username).toBe('testuser');
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should update only username when gender not provided', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.user.update.mockResolvedValue({
+        ...existingUser,
+        username: 'anothername',
+      });
+
+      const result = await service.updateProfile(userId, {
+        username: 'anothername',
+      });
+
+      expect(result.username).toBe('anothername');
     });
   });
 });

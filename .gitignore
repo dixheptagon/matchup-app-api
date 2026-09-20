@@ -61,6 +61,7 @@ dist/
 /prisma/generated/prisma
 
 # Agent Skills
+opencode.json
 /.agents
 /.claude
 /.windsurf

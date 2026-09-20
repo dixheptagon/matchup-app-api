@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../config/prisma/prisma.service.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
@@ -21,7 +22,11 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (dto.username && dto.username !== user.username) {
+    if (dto.username !== undefined) {
+      if (dto.username === user.username) {
+        throw new BadRequestException('New username must be different from current username');
+      }
+
       const existing = await this.prisma.user.findFirst({
         where: { username: dto.username },
       });

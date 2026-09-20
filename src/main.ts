@@ -27,7 +27,7 @@ async function bootstrap() {
   await app.listen(port ?? 8000);
 
   if (configService.isDevelopment) {
-    console.log(`🚀 Application is running on http://localhost:${port}`);
+    console.log(`🚀 Application is running on http://localhost:${port}/api`);
   } else {
     console.log(
       `🚀 Application is running on [URL: ${configService.get('NODE_ENV')}]`,
