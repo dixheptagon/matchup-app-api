@@ -3,16 +3,39 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../config/prisma/prisma.service.js';
 import { CreateSportClubDto } from './dto/create-sport-club.dto.js';
 import { UpdateSportClubDto } from './dto/update-sport-club.dto.js';
+
+const MAX_CLUBS_PER_OWNER = 3;
 
 @Injectable()
 export class SportClubsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: number, dto: CreateSportClubDto) {
+    const owner = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!owner || owner.deletedAt) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    const clubCount = await this.prisma.sportClub.count({
+      where: { ownerId: userId },
+    });
+    if (clubCount >= MAX_CLUBS_PER_OWNER) {
+      throw new ConflictException('Maximum 3 clubs per owner allowed');
+    }
+
+    const existing = await this.prisma.sportClub.findFirst({
+      where: { name: { equals: dto.name, mode: 'insensitive' } },
+    });
+    if (existing) {
+      throw new ConflictException('Club name already exists');
+    }
+
     return this.prisma.sportClub.create({
       data: {
         name: dto.name,
@@ -100,14 +123,27 @@ export class SportClubsService {
       throw new ForbiddenException('Only the owner can modify this club');
     }
 
-    if (dto.name && dto.name !== club.name) {
-      const existing = await this.prisma.sportClub.findUnique({
-        where: { name: dto.name },
+    if (dto.name !== undefined) {
+      const trimmedName = dto.name.trim();
+
+      if (trimmedName === club.name) {
+        throw new BadRequestException(
+          'New name must be different from current name',
+        );
+      }
+
+      const existing = await this.prisma.sportClub.findFirst({
+        where: {
+          name: { equals: trimmedName, mode: 'insensitive' },
+          id: { not: clubId },
+        },
       });
 
       if (existing) {
         throw new ConflictException('Club name already exists');
       }
+
+      dto.name = trimmedName;
     }
 
     return this.prisma.sportClub.update({
