@@ -11,7 +11,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  ParseUUIDPipe,
 } from '@nestjs/common';
 import { SportClubsService } from './sport-clubs.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
@@ -51,26 +50,26 @@ export class SportClubsController {
     );
   }
 
-  @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.sportClubsService.findOne(id);
+  @Get(':slug')
+  async findOne(@Param('slug') slug: string) {
+    return this.sportClubsService.findOne(slug);
   }
 
-  @Patch(':id')
+  @Patch(':slug')
   async update(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('slug') slug: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: UpdateSportClubDto,
   ) {
-    return this.sportClubsService.update(id, req.user.id, dto);
+    return this.sportClubsService.update(slug, req.user.id, dto);
   }
 
-  @Delete(':id')
+  @Delete(':slug')
   @HttpCode(HttpStatus.OK)
   async remove(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('slug') slug: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.sportClubsService.remove(id, req.user.id);
+    return this.sportClubsService.remove(slug, req.user.id);
   }
 }

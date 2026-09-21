@@ -90,9 +90,9 @@ export class SportClubsService {
     };
   }
 
-  async findOne(clubId: string) {
+  async findOne(slug: string) {
     const club = await this.prisma.sportClub.findUnique({
-      where: { id: clubId },
+      where: { slug },
       select: {
         id: true,
         name: true,
@@ -117,9 +117,9 @@ export class SportClubsService {
     return club;
   }
 
-  async update(clubId: string, userId: string, dto: UpdateSportClubDto) {
+  async update(slug: string, userId: string, dto: UpdateSportClubDto) {
     const club = await this.prisma.sportClub.findUnique({
-      where: { id: clubId },
+      where: { slug },
     });
 
     if (!club) {
@@ -142,7 +142,7 @@ export class SportClubsService {
       const existing = await this.prisma.sportClub.findFirst({
         where: {
           name: { equals: dto.name, mode: 'insensitive' },
-          id: { not: clubId },
+          id: { not: club.id },
         },
       });
 
@@ -150,13 +150,17 @@ export class SportClubsService {
         throw new ConflictException('Club name already exists');
       }
 
-      const slug = await generateUniqueSlug(dto.name, this.prisma, 'sportClub');
+      const newSlug = await generateUniqueSlug(
+        dto.name,
+        this.prisma,
+        'sportClub',
+      );
 
-      updateData = { name: dto.name, slug };
+      updateData = { name: dto.name, slug: newSlug };
     }
 
     return this.prisma.sportClub.update({
-      where: { id: clubId },
+      where: { id: club.id },
       data: updateData,
       select: {
         id: true,
@@ -169,9 +173,9 @@ export class SportClubsService {
     });
   }
 
-  async remove(clubId: string, userId: string) {
+  async remove(slug: string, userId: string) {
     const club = await this.prisma.sportClub.findUnique({
-      where: { id: clubId },
+      where: { slug },
     });
 
     if (!club) {
@@ -182,7 +186,7 @@ export class SportClubsService {
       throw new ForbiddenException('Only the owner can delete this club');
     }
 
-    await this.prisma.sportClub.delete({ where: { id: clubId } });
+    await this.prisma.sportClub.delete({ where: { id: club.id } });
 
     return { message: 'Club deleted successfully' };
   }

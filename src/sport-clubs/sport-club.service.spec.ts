@@ -266,8 +266,11 @@ describe('SportClubsService', () => {
     it('should return club with counts when found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(mockClubWithCounts);
 
-      const result = await service.findOne('1');
+      const result = await service.findOne('test-club');
 
+      expect(mockPrisma.sportClub.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { slug: 'test-club' } }),
+      );
       expect(result.id).toBe('1');
       expect(result.slug).toBe('test-club');
       expect(result._count).toEqual({ members: 5, sessions: 10, courts: 3 });
@@ -276,7 +279,9 @@ describe('SportClubsService', () => {
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('missing-club')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -291,18 +296,26 @@ describe('SportClubsService', () => {
         slug: 'updated-club',
       });
 
-      const result = await service.update('1', '1', { name: 'Updated Club' });
+      const result = await service.update('test-club', '1', {
+        name: 'Updated Club',
+      });
 
       expect(result.name).toBe('Updated Club');
       expect(result.slug).toBe('updated-club');
+      expect(mockPrisma.sportClub.findUnique).toHaveBeenCalledWith({
+        where: { slug: 'test-club' },
+      });
+      expect(mockPrisma.sportClub.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: '1' } }),
+      );
     });
 
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.update('999', '1', { name: 'New' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update('missing-club', '1', { name: 'New' }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw ForbiddenException when user is not owner', async () => {
@@ -312,7 +325,7 @@ describe('SportClubsService', () => {
       });
 
       await expect(
-        service.update('1', '999', { name: 'Hacked' }),
+        service.update('test-club', '999', { name: 'Hacked' }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -324,7 +337,7 @@ describe('SportClubsService', () => {
       });
 
       await expect(
-        service.update('1', '1', { name: 'Taken Name' }),
+        service.update('test-club', '1', { name: 'Taken Name' }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -336,7 +349,7 @@ describe('SportClubsService', () => {
       });
 
       await expect(
-        service.update('1', '1', { name: 'taken name' }),
+        service.update('test-club', '1', { name: 'taken name' }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -344,7 +357,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
 
       await expect(
-        service.update('1', '1', { name: 'Test Club' }),
+        service.update('test-club', '1', { name: 'Test Club' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -352,7 +365,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
 
       try {
-        await service.update('1', '1', { name: 'Test Club' });
+        await service.update('test-club', '1', { name: 'Test Club' });
       } catch (error: any) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.message).toBe(
@@ -365,7 +378,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
       mockPrisma.sportClub.update.mockResolvedValue(mockClub);
 
-      const result = await service.update('1', '1', {});
+      const result = await service.update('test-club', '1', {});
 
       expect(result.name).toBe('Test Club');
       expect(mockPrisma.sportClub.findFirst).not.toHaveBeenCalled();
@@ -380,7 +393,7 @@ describe('SportClubsService', () => {
         slug: 'new-name',
       });
 
-      await service.update('1', '1', { name: 'New Name' });
+      await service.update('test-club', '1', { name: 'New Name' });
 
       expect(mockPrisma.sportClub.findFirst).toHaveBeenCalledWith({
         where: {
@@ -397,7 +410,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.count.mockResolvedValue(0);
       mockPrisma.sportClub.update.mockResolvedValue(updatedClub);
 
-      const result = await service.update(mockClub.id, mockOwner.id, {
+      const result = await service.update(mockClub.slug, mockOwner.id, {
         name: 'New Name',
       });
 
@@ -422,7 +435,7 @@ describe('SportClubsService', () => {
         slug: 'new-name-1',
       });
 
-      const result = await service.update(mockClub.id, mockOwner.id, {
+      const result = await service.update(mockClub.slug, mockOwner.id, {
         name: 'New Name',
       });
 
@@ -440,8 +453,11 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(mockClub);
       mockPrisma.sportClub.delete.mockResolvedValue(mockClub);
 
-      const result = await service.remove('1', '1');
+      const result = await service.remove('test-club', '1');
 
+      expect(mockPrisma.sportClub.findUnique).toHaveBeenCalledWith({
+        where: { slug: 'test-club' },
+      });
       expect(result.message).toBe('Club deleted successfully');
       expect(mockPrisma.sportClub.delete).toHaveBeenCalledWith({
         where: { id: '1' },
@@ -451,7 +467,7 @@ describe('SportClubsService', () => {
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove('999', '1')).rejects.toThrow(
+      await expect(service.remove('missing-club', '1')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -462,7 +478,7 @@ describe('SportClubsService', () => {
         ownerId: '1',
       });
 
-      await expect(service.remove('1', '999')).rejects.toThrow(
+      await expect(service.remove('test-club', '999')).rejects.toThrow(
         ForbiddenException,
       );
     });
