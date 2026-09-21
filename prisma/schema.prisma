@@ -231,7 +231,7 @@ model SportSession {
   id          String        @id @default(uuid())
   clubId      String
   title       String?       @db.VarChar(250)
-  slug        String?       @db.VarChar(350)
+  slug        String?       @unique @db.VarChar(350)
   status      SessionStatus @default(DRAFT)
   description String?
   type        SessionsType  @default(OPEN_PLAY)

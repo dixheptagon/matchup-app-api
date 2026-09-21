@@ -13,9 +13,20 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async updateProfile(
-    userId: number,
+    userId: string,
     dto: UpdateProfileDto,
-  ): Promise<Pick<User, 'id' | 'name' | 'username' | 'email' | 'gender' | 'isVerified' | 'createdAt'>> {
+  ): Promise<
+    Pick<
+      User,
+      | 'id'
+      | 'name'
+      | 'username'
+      | 'email'
+      | 'gender'
+      | 'isVerified'
+      | 'createdAt'
+    >
+  > {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!user || user.deletedAt) {
@@ -24,7 +35,9 @@ export class UsersService {
 
     if (dto.username !== undefined) {
       if (dto.username === user.username) {
-        throw new BadRequestException('New username must be different from current username');
+        throw new BadRequestException(
+          'New username must be different from current username',
+        );
       }
 
       const existing = await this.prisma.user.findFirst({

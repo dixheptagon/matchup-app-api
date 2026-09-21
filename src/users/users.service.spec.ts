@@ -41,7 +41,7 @@ describe('UsersService', () => {
   });
 
   describe('updateProfile', () => {
-    const userId = 1;
+    const userId = '1';
     const existingUser = {
       id: userId,
       name: 'Test User',

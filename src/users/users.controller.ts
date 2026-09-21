@@ -1,17 +1,11 @@
-import {
-  Controller,
-  Patch,
-  Body,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Patch, Body, Req, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import type { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
-  user: { id: number };
+  user: { id: string };
 }
 
 @Controller('users')

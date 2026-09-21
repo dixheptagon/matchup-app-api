@@ -137,8 +137,19 @@ export class AuthService {
   }
 
   async getProfile(
-    userId: number,
-  ): Promise<Pick<User, 'id' | 'name' | 'username' | 'email' | 'gender' | 'isVerified' | 'createdAt'>> {
+    userId: string,
+  ): Promise<
+    Pick<
+      User,
+      | 'id'
+      | 'name'
+      | 'username'
+      | 'email'
+      | 'gender'
+      | 'isVerified'
+      | 'createdAt'
+    >
+  > {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {

@@ -27,7 +27,7 @@ describe('AuthService', () => {
   };
 
   const mockUser = {
-    id: 3,
+    id: '3',
     name: 'Foren tino',
     email: 'forentino06@gmail.com',
     isVerified: true,
@@ -350,7 +350,7 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException when user not found', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProfile(999)).rejects.toThrow(
+      await expect(service.getProfile('999')).rejects.toThrow(
         UnauthorizedException,
       );
     });

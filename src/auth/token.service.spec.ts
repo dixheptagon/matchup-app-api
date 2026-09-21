@@ -26,7 +26,7 @@ describe('TokenService', () => {
   };
 
   const mockUser = {
-    id: 3,
+    id: '3',
     name: 'Foren tino',
     email: 'forentino06@gmail.com',
     isVerified: true,
@@ -184,7 +184,9 @@ describe('TokenService', () => {
       });
 
       const createCall = mockPrisma.refreshSession.create.mock.calls[0][0];
-      expect(createCall.data.hashedToken).toBe(createHash('sha256').update(token).digest('hex'));
+      expect(createCall.data.hashedToken).toBe(
+        createHash('sha256').update(token).digest('hex'),
+      );
       expect(createCall.data.hashedToken).not.toBe(token);
     });
   });

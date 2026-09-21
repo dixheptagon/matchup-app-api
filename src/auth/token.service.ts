@@ -7,7 +7,7 @@ import { ENV } from '../config/env/env.config.js';
 import { User } from '../../prisma/generated/prisma/client.js';
 
 export interface TokenPayload {
-  sub: number;
+  sub: string;
   email: string | null;
   name: string | null;
 }
@@ -38,7 +38,7 @@ export class TokenService {
     });
   }
 
-  signRefreshToken(userId: number): string {
+  signRefreshToken(userId: string): string {
     return this.jwtService.sign(
       { sub: userId },
       {
@@ -53,7 +53,7 @@ export class TokenService {
   }
 
   async createRefreshSession(
-    userId: number,
+    userId: string,
     token: string,
     metadata: { deviceName: string; ipAddress: string; userAgent: string },
   ) {
@@ -97,7 +97,7 @@ export class TokenService {
     });
   }
 
-  async revokeAllUserSessions(userId: number) {
+  async revokeAllUserSessions(userId: string) {
     return this.prisma.refreshSession.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },

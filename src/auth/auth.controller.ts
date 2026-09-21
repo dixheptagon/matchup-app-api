@@ -15,7 +15,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import type { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
-  user: { id: number; email: string; name: string };
+  user: { id: string; email: string; name: string };
 }
 
 function parseDeviceName(ua: string): string {

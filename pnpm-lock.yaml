@@ -166,6 +166,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      slugify:
+        specifier: ^1.6.9
+        version: 1.6.9
       zod:
         specifier: ^4.5.4
         version: 4.5.4
@@ -3165,6 +3168,10 @@ packages:
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
+
+  slugify@1.6.9:
+    resolution: {integrity: sha512-vZ7rfeehZui7wQs438JXBckYLkIIdfHOXsaVEUMyS5fHo1483l1bMdo0EDSWYclY0yZKFOipDy4KHuKs6ssvdg==}
+    engines: {node: '>=8.0.0'}
 
   sort-keys-length@1.0.1:
     resolution: {integrity: sha512-GRbEOUqCxemTAk/b32F2xa8wDTs+Z1QHOkbhJDQTvv/6G3ZkbJ+frYWsTcc7cBB3Fu4wy4XlLCuNtJuMn7Gsvw==}
@@ -6411,6 +6418,8 @@ snapshots:
 
   slash@3.0.0:
     optional: true
+
+  slugify@1.6.9: {}
 
   sort-keys-length@1.0.1:
     dependencies:

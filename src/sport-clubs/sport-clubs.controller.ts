@@ -9,9 +9,9 @@ import {
   Query,
   Req,
   UseGuards,
-  ParseIntPipe,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { SportClubsService } from './sport-clubs.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
@@ -20,7 +20,7 @@ import { UpdateSportClubDto } from './dto/update-sport-club.dto.js';
 import type { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
-  user: { id: number };
+  user: { id: string };
 }
 
 @Controller('sport-clubs')
@@ -44,17 +44,21 @@ export class SportClubsController {
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.sportClubsService.findAllByOwner(req.user.id, pageNum, limitNum);
+    return this.sportClubsService.findAllByOwner(
+      req.user.id,
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.sportClubsService.findOne(id);
   }
 
   @Patch(':id')
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Req() req: AuthenticatedRequest,
     @Body() dto: UpdateSportClubDto,
   ) {
@@ -64,7 +68,7 @@ export class SportClubsController {
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   async remove(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Req() req: AuthenticatedRequest,
   ) {
     return this.sportClubsService.remove(id, req.user.id);

@@ -20,6 +20,6 @@
     "types": ["vitest/globals", "node"],
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]
 }

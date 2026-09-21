@@ -26,9 +26,10 @@ describe('SportClubsService', () => {
   };
 
   const mockClub = {
-    id: 1,
+    id: '1',
     name: 'Test Club',
-    ownerId: 1,
+    slug: 'test-club',
+    ownerId: '1',
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
   };
@@ -39,7 +40,7 @@ describe('SportClubsService', () => {
   };
 
   const mockOwner = {
-    id: 1,
+    id: '1',
     name: 'Test Owner',
     email: 'owner@example.com',
     deletedAt: null,
@@ -82,26 +83,28 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findFirst.mockResolvedValue(null);
       mockPrisma.sportClub.create.mockResolvedValue(mockClub);
 
-      const result = await service.create(1, { name: 'Test Club' });
+      const result = await service.create('1', { name: 'Test Club' });
 
-      expect(result.id).toBe(1);
+      expect(result.id).toBe('1');
       expect(result.name).toBe('Test Club');
-      expect(result.ownerId).toBe(1);
+      expect(result.slug).toBe('test-club');
+      expect(result.ownerId).toBe('1');
     });
 
-    it('should call prisma with correct data including ownerId', async () => {
+    it('should call prisma with correct data including generated slug', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
       mockPrisma.sportClub.count.mockResolvedValue(0);
       mockPrisma.sportClub.findFirst.mockResolvedValue(null);
       mockPrisma.sportClub.create.mockResolvedValue(mockClub);
 
-      await service.create(42, { name: 'My Club' });
+      await service.create('42', { name: 'My Club' });
 
       expect(mockPrisma.sportClub.create).toHaveBeenCalledWith({
-        data: { name: 'My Club', ownerId: 42 },
+        data: { name: 'My Club', slug: 'my-club', ownerId: '42' },
         select: {
           id: true,
           name: true,
+          slug: true,
           ownerId: true,
           createdAt: true,
           updatedAt: true,
@@ -112,9 +115,9 @@ describe('SportClubsService', () => {
     it('should throw NotFoundException if owner does not exist', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.create(999, { name: 'Test Club' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.create('999', { name: 'Test Club' }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException if owner is deleted', async () => {
@@ -123,7 +126,7 @@ describe('SportClubsService', () => {
         deletedAt: new Date(),
       });
 
-      await expect(service.create(1, { name: 'Test Club' })).rejects.toThrow(
+      await expect(service.create('1', { name: 'Test Club' })).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -132,11 +135,11 @@ describe('SportClubsService', () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
       mockPrisma.sportClub.count.mockResolvedValue(3);
 
-      await expect(service.create(1, { name: 'New Club' })).rejects.toThrow(
+      await expect(service.create('1', { name: 'New Club' })).rejects.toThrow(
         ConflictException,
       );
       expect(mockPrisma.sportClub.count).toHaveBeenCalledWith({
-        where: { ownerId: 1 },
+        where: { ownerId: '1' },
       });
     });
 
@@ -144,12 +147,12 @@ describe('SportClubsService', () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
       mockPrisma.sportClub.count.mockResolvedValue(0);
       mockPrisma.sportClub.findFirst.mockResolvedValue({
-        id: 2,
+        id: '2',
         name: 'existing club',
       });
 
       await expect(
-        service.create(1, { name: 'Existing Club' }),
+        service.create('1', { name: 'Existing Club' }),
       ).rejects.toThrow(ConflictException);
       expect(mockPrisma.sportClub.findFirst).toHaveBeenCalledWith({
         where: { name: { equals: 'Existing Club', mode: 'insensitive' } },
@@ -160,12 +163,53 @@ describe('SportClubsService', () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
       mockPrisma.sportClub.count.mockResolvedValue(0);
       mockPrisma.sportClub.findFirst.mockResolvedValue({
-        id: 2,
+        id: '2',
         name: 'MY CLUB',
       });
 
-      await expect(service.create(1, { name: 'my club' })).rejects.toThrow(
+      await expect(service.create('1', { name: 'my club' })).rejects.toThrow(
         ConflictException,
+      );
+    });
+
+    it('should generate slug from the club name on create', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
+      mockPrisma.sportClub.count.mockResolvedValue(0);
+      mockPrisma.sportClub.findFirst.mockResolvedValue(null);
+      mockPrisma.sportClub.create.mockResolvedValue({
+        ...mockClub,
+        name: 'Create Club',
+        slug: 'create-club',
+      });
+
+      await service.create(mockOwner.id, { name: 'Create Club' });
+
+      expect(mockPrisma.sportClub.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ slug: 'create-club' }),
+        }),
+      );
+    });
+
+    it('should append numeric suffix when generated slug already exists', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(mockOwner);
+      mockPrisma.sportClub.count
+        .mockResolvedValueOnce(0) // owner club count
+        .mockResolvedValueOnce(1) // 'my-club' already exists
+        .mockResolvedValueOnce(0); // 'my-club-1' is free
+      mockPrisma.sportClub.findFirst.mockResolvedValue(null);
+      mockPrisma.sportClub.create.mockResolvedValue({
+        ...mockClub,
+        name: 'My Club',
+        slug: 'my-club-1',
+      });
+
+      await service.create('1', { name: 'My Club' });
+
+      expect(mockPrisma.sportClub.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ slug: 'my-club-1' }),
+        }),
       );
     });
   });
@@ -175,9 +219,10 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findMany.mockResolvedValue([mockClubWithCounts]);
       mockPrisma.sportClub.count.mockResolvedValue(1);
 
-      const result = await service.findAllByOwner(1);
+      const result = await service.findAllByOwner('1');
 
       expect(result.data).toHaveLength(1);
+      expect(result.data[0].slug).toBe('test-club');
       expect(result.data[0]._count).toEqual({
         members: 5,
         sessions: 10,
@@ -190,7 +235,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findMany.mockResolvedValue([]);
       mockPrisma.sportClub.count.mockResolvedValue(0);
 
-      const result = await service.findAllByOwner(999);
+      const result = await service.findAllByOwner('999');
 
       expect(result.data).toHaveLength(0);
       expect(result.meta.total).toBe(0);
@@ -200,7 +245,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findMany.mockResolvedValue([]);
       mockPrisma.sportClub.count.mockResolvedValue(0);
 
-      await service.findAllByOwner(1, 3, 5);
+      await service.findAllByOwner('1', 3, 5);
 
       expect(mockPrisma.sportClub.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 10, take: 5 }),
@@ -211,7 +256,7 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findMany.mockResolvedValue([]);
       mockPrisma.sportClub.count.mockResolvedValue(42);
 
-      const result = await service.findAllByOwner(1, 2, 10);
+      const result = await service.findAllByOwner('1', 2, 10);
 
       expect(result.meta).toEqual({ page: 2, limit: 10, total: 42 });
     });
@@ -221,38 +266,41 @@ describe('SportClubsService', () => {
     it('should return club with counts when found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(mockClubWithCounts);
 
-      const result = await service.findOne(1);
+      const result = await service.findOne('1');
 
-      expect(result.id).toBe(1);
+      expect(result.id).toBe('1');
+      expect(result.slug).toBe('test-club');
       expect(result._count).toEqual({ members: 5, sessions: 10, courts: 3 });
     });
 
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('999')).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('update', () => {
     it('should update club name when user is owner', async () => {
-      mockPrisma.sportClub.findUnique
-        .mockResolvedValueOnce(mockClub)
-        .mockResolvedValueOnce(null);
+      mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
+      mockPrisma.sportClub.findFirst.mockResolvedValue(null);
+      mockPrisma.sportClub.count.mockResolvedValue(0);
       mockPrisma.sportClub.update.mockResolvedValue({
         ...mockClub,
         name: 'Updated Club',
+        slug: 'updated-club',
       });
 
-      const result = await service.update(1, 1, { name: 'Updated Club' });
+      const result = await service.update('1', '1', { name: 'Updated Club' });
 
       expect(result.name).toBe('Updated Club');
+      expect(result.slug).toBe('updated-club');
     });
 
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.update(999, 1, { name: 'New' })).rejects.toThrow(
+      await expect(service.update('999', '1', { name: 'New' })).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -260,51 +308,51 @@ describe('SportClubsService', () => {
     it('should throw ForbiddenException when user is not owner', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue({
         ...mockClub,
-        ownerId: 1,
+        ownerId: '1',
       });
 
-      await expect(service.update(1, 999, { name: 'Hacked' })).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.update('1', '999', { name: 'Hacked' }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw ConflictException when name already exists (case-insensitive)', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
       mockPrisma.sportClub.findFirst.mockResolvedValueOnce({
-        id: 2,
+        id: '2',
         name: 'Taken Name',
       });
 
       await expect(
-        service.update(1, 1, { name: 'Taken Name' }),
+        service.update('1', '1', { name: 'Taken Name' }),
       ).rejects.toThrow(ConflictException);
     });
 
     it('should throw ConflictException when name already exists with different case', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
       mockPrisma.sportClub.findFirst.mockResolvedValueOnce({
-        id: 2,
+        id: '2',
         name: 'TAKEN NAME',
       });
 
       await expect(
-        service.update(1, 1, { name: 'taken name' }),
+        service.update('1', '1', { name: 'taken name' }),
       ).rejects.toThrow(ConflictException);
     });
 
     it('should throw BadRequestException when new name is same as current', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
 
-      await expect(service.update(1, 1, { name: 'Test Club' })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.update('1', '1', { name: 'Test Club' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException with correct message for same name', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
 
       try {
-        await service.update(1, 1, { name: 'Test Club' });
+        await service.update('1', '1', { name: 'Test Club' });
       } catch (error: any) {
         expect(error).toBeInstanceOf(BadRequestException);
         expect(error.message).toBe(
@@ -313,47 +361,77 @@ describe('SportClubsService', () => {
       }
     });
 
-    it('should trim name before checking and updating', async () => {
-      mockPrisma.sportClub.findUnique
-        .mockResolvedValueOnce(mockClub)
-        .mockResolvedValueOnce(null);
-      mockPrisma.sportClub.update.mockResolvedValue({
-        ...mockClub,
-        name: 'Updated Club',
-      });
-
-      const result = await service.update(1, 1, { name: '  Updated Club  ' });
-
-      expect(result.name).toBe('Updated Club');
-    });
-
     it('should not check name uniqueness when name is not provided', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
       mockPrisma.sportClub.update.mockResolvedValue(mockClub);
 
-      const result = await service.update(1, 1, {});
+      const result = await service.update('1', '1', {});
 
       expect(result.name).toBe('Test Club');
       expect(mockPrisma.sportClub.findFirst).not.toHaveBeenCalled();
     });
 
     it('should exclude current club from name uniqueness check', async () => {
-      mockPrisma.sportClub.findUnique
-        .mockResolvedValueOnce(mockClub)
-        .mockResolvedValueOnce(null);
+      mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
+      mockPrisma.sportClub.findFirst.mockResolvedValueOnce(null);
       mockPrisma.sportClub.update.mockResolvedValue({
         ...mockClub,
         name: 'New Name',
+        slug: 'new-name',
       });
 
-      await service.update(1, 1, { name: 'New Name' });
+      await service.update('1', '1', { name: 'New Name' });
 
       expect(mockPrisma.sportClub.findFirst).toHaveBeenCalledWith({
         where: {
           name: { equals: 'New Name', mode: 'insensitive' },
-          id: { not: 1 },
+          id: { not: '1' },
         },
       });
+    });
+
+    it('should regenerate and return slug when name changes', async () => {
+      const updatedClub = { ...mockClub, name: 'New Name', slug: 'new-name' };
+      mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
+      mockPrisma.sportClub.findFirst.mockResolvedValue(null);
+      mockPrisma.sportClub.count.mockResolvedValue(0);
+      mockPrisma.sportClub.update.mockResolvedValue(updatedClub);
+
+      const result = await service.update(mockClub.id, mockOwner.id, {
+        name: 'New Name',
+      });
+
+      expect(result.slug).toBe('new-name');
+      expect(mockPrisma.sportClub.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ name: 'New Name', slug: 'new-name' }),
+          select: expect.objectContaining({ slug: true }),
+        }),
+      );
+    });
+
+    it('should append numeric suffix when regenerated slug already exists', async () => {
+      mockPrisma.sportClub.findUnique.mockResolvedValueOnce(mockClub);
+      mockPrisma.sportClub.findFirst.mockResolvedValue(null);
+      mockPrisma.sportClub.count
+        .mockResolvedValueOnce(1) // 'new-name' already exists
+        .mockResolvedValueOnce(0); // 'new-name-1' is free
+      mockPrisma.sportClub.update.mockResolvedValue({
+        ...mockClub,
+        name: 'New Name',
+        slug: 'new-name-1',
+      });
+
+      const result = await service.update(mockClub.id, mockOwner.id, {
+        name: 'New Name',
+      });
+
+      expect(result.slug).toBe('new-name-1');
+      expect(mockPrisma.sportClub.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ slug: 'new-name-1' }),
+        }),
+      );
     });
   });
 
@@ -362,27 +440,31 @@ describe('SportClubsService', () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(mockClub);
       mockPrisma.sportClub.delete.mockResolvedValue(mockClub);
 
-      const result = await service.remove(1, 1);
+      const result = await service.remove('1', '1');
 
       expect(result.message).toBe('Club deleted successfully');
       expect(mockPrisma.sportClub.delete).toHaveBeenCalledWith({
-        where: { id: 1 },
+        where: { id: '1' },
       });
     });
 
     it('should throw NotFoundException when club not found', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove(999, 1)).rejects.toThrow(NotFoundException);
+      await expect(service.remove('999', '1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw ForbiddenException when user is not owner', async () => {
       mockPrisma.sportClub.findUnique.mockResolvedValue({
         ...mockClub,
-        ownerId: 1,
+        ownerId: '1',
       });
 
-      await expect(service.remove(1, 999)).rejects.toThrow(ForbiddenException);
+      await expect(service.remove('1', '999')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

@@ -63,7 +63,7 @@ export async function setupTestApp(): Promise<TestContext> {
 
 export async function cleanupTestApp(
   prisma: PrismaService,
-  userId?: number,
+  userId?: string,
 ): Promise<void> {
   if (userId) {
     // Targeted cleanup: only delete this test user's data

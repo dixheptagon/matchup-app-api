@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../config/prisma/prisma.service.js';
 import { CreateSportClubDto } from './dto/create-sport-club.dto.js';
 import { UpdateSportClubDto } from './dto/update-sport-club.dto.js';
+import { generateUniqueSlug } from '../common/utils/generate-slug.js';
 
 const MAX_CLUBS_PER_OWNER = 3;
 
@@ -15,7 +16,7 @@ const MAX_CLUBS_PER_OWNER = 3;
 export class SportClubsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: number, dto: CreateSportClubDto) {
+  async create(userId: string, dto: CreateSportClubDto) {
     const owner = await this.prisma.user.findUnique({ where: { id: userId } });
 
     if (!owner || owner.deletedAt) {
@@ -36,14 +37,18 @@ export class SportClubsService {
       throw new ConflictException('Club name already exists');
     }
 
+    const slug = await generateUniqueSlug(dto.name, this.prisma, 'sportClub');
+
     return this.prisma.sportClub.create({
       data: {
         name: dto.name,
+        slug,
         ownerId: userId,
       },
       select: {
         id: true,
         name: true,
+        slug: true,
         ownerId: true,
         createdAt: true,
         updatedAt: true,
@@ -51,7 +56,7 @@ export class SportClubsService {
     });
   }
 
-  async findAllByOwner(userId: number, page = 1, limit = 20) {
+  async findAllByOwner(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
     const [data, total] = await Promise.all([
@@ -60,6 +65,7 @@ export class SportClubsService {
         select: {
           id: true,
           name: true,
+          slug: true,
           ownerId: true,
           createdAt: true,
           updatedAt: true,
@@ -84,12 +90,13 @@ export class SportClubsService {
     };
   }
 
-  async findOne(clubId: number) {
+  async findOne(clubId: string) {
     const club = await this.prisma.sportClub.findUnique({
       where: { id: clubId },
       select: {
         id: true,
         name: true,
+        slug: true,
         ownerId: true,
         createdAt: true,
         updatedAt: true,
@@ -110,7 +117,7 @@ export class SportClubsService {
     return club;
   }
 
-  async update(clubId: number, userId: number, dto: UpdateSportClubDto) {
+  async update(clubId: string, userId: string, dto: UpdateSportClubDto) {
     const club = await this.prisma.sportClub.findUnique({
       where: { id: clubId },
     });
@@ -123,10 +130,10 @@ export class SportClubsService {
       throw new ForbiddenException('Only the owner can modify this club');
     }
 
-    if (dto.name !== undefined) {
-      const trimmedName = dto.name.trim();
+    let updateData: Partial<{ name: string; slug: string }> = {};
 
-      if (trimmedName === club.name) {
+    if (dto.name !== undefined) {
+      if (dto.name === club.name) {
         throw new BadRequestException(
           'New name must be different from current name',
         );
@@ -134,7 +141,7 @@ export class SportClubsService {
 
       const existing = await this.prisma.sportClub.findFirst({
         where: {
-          name: { equals: trimmedName, mode: 'insensitive' },
+          name: { equals: dto.name, mode: 'insensitive' },
           id: { not: clubId },
         },
       });
@@ -143,17 +150,18 @@ export class SportClubsService {
         throw new ConflictException('Club name already exists');
       }
 
-      dto.name = trimmedName;
+      const slug = await generateUniqueSlug(dto.name, this.prisma, 'sportClub');
+
+      updateData = { name: dto.name, slug };
     }
 
     return this.prisma.sportClub.update({
       where: { id: clubId },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-      },
+      data: updateData,
       select: {
         id: true,
         name: true,
+        slug: true,
         ownerId: true,
         createdAt: true,
         updatedAt: true,
@@ -161,7 +169,7 @@ export class SportClubsService {
     });
   }
 
-  async remove(clubId: number, userId: number) {
+  async remove(clubId: string, userId: string) {
     const club = await this.prisma.sportClub.findUnique({
       where: { id: clubId },
     });
