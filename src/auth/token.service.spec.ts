@@ -32,6 +32,7 @@ describe('TokenService', () => {
     isVerified: true,
     gender: 'MALE' as const,
     username: null,
+    usernameChangedAt: null,
     createdAt: new Date('2026-09-14'),
     updatedAt: new Date('2026-09-14'),
     deletedAt: null,

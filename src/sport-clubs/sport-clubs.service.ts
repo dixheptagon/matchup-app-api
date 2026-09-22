@@ -9,6 +9,7 @@ import { PrismaService } from '../config/prisma/prisma.service.js';
 import { CreateSportClubDto } from './dto/create-sport-club.dto.js';
 import { UpdateSportClubDto } from './dto/update-sport-club.dto.js';
 import { generateUniqueSlug } from '../common/utils/generate-slug.js';
+import { RoleType } from '../../prisma/generated/prisma/enums.js';
 
 const MAX_CLUBS_PER_OWNER = 3;
 
@@ -44,6 +45,13 @@ export class SportClubsService {
         name: dto.name,
         slug,
         ownerId: userId,
+        members: {
+          create: {
+            userId,
+            displayName: owner.name ?? owner.username ?? 'Owner',
+            role: RoleType.OWNER,
+          },
+        },
       },
       select: {
         id: true,

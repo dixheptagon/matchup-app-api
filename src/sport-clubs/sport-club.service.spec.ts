@@ -100,7 +100,18 @@ describe('SportClubsService', () => {
       await service.create('42', { name: 'My Club' });
 
       expect(mockPrisma.sportClub.create).toHaveBeenCalledWith({
-        data: { name: 'My Club', slug: 'my-club', ownerId: '42' },
+        data: {
+          name: 'My Club',
+          slug: 'my-club',
+          ownerId: '42',
+          members: {
+            create: {
+              userId: '42',
+              displayName: 'Test Owner',
+              role: 'OWNER',
+            },
+          },
+        },
         select: {
           id: true,
           name: true,

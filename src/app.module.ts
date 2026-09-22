@@ -9,6 +9,7 @@ import { PrismaModule } from './config/prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SportClubsModule } from './sport-clubs/sport-clubs.module.js';
+import { SportMembersModule } from './sport-members/sport-members.module.js';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
@@ -26,6 +27,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor.
     UsersModule,
     AuthModule,
     SportClubsModule,
+    SportMembersModule,
   ],
   controllers: [AppController],
   providers: [
