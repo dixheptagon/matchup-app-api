@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import {
   setupTestApp,
   cleanupTestApp,
@@ -26,9 +27,10 @@ describe('SportClubs (e2e)', () => {
         .send({ name: 'E2E Test Club' })
         .expect(201);
 
-      expect(res.body).toHaveProperty('id');
-      expect(res.body.name).toBe('E2E Test Club');
-      expect(res.body.ownerId).toBe(ctx.testUser.id);
+      expect(res.body.data).toHaveProperty('id');
+      expect(res.body.data).toHaveProperty('slug');
+      expect(res.body.data.name).toBe('E2E Test Club');
+      expect(res.body.data.ownerId).toBe(ctx.testUser.id);
     });
 
     it('should return 401 without JWT token', async () => {
@@ -95,48 +97,50 @@ describe('SportClubs (e2e)', () => {
     });
   });
 
-  describe('GET /api/sport-clubs/:id', () => {
-    let testClubId: number;
+  describe('GET /api/sport-clubs/:slug', () => {
+    let testClubId: string;
+    let testClubSlug: string;
 
     beforeAll(async () => {
       const res = await request(ctx.app.getHttpServer())
         .post('/api/sport-clubs')
         .set(authHeader(ctx.accessToken))
         .send({ name: 'Get Test Club' });
-      testClubId = res.body.id;
+      testClubId = res.body.data.id;
+      testClubSlug = res.body.data.slug;
     });
 
-    it('should return club by ID with counts', async () => {
+    it('should return club by slug with counts', async () => {
       const res = await request(ctx.app.getHttpServer())
-        .get(`/api/sport-clubs/${testClubId}`)
+        .get(`/api/sport-clubs/${testClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .expect(200);
 
-      expect(res.body.id).toBe(testClubId);
-      expect(res.body.name).toBe('Get Test Club');
-      expect(res.body).toHaveProperty('_count');
-      expect(res.body._count).toHaveProperty('members');
-      expect(res.body._count).toHaveProperty('sessions');
-      expect(res.body._count).toHaveProperty('courts');
+      expect(res.body.data.id).toBe(testClubId);
+      expect(res.body.data.name).toBe('Get Test Club');
+      expect(res.body.data).toHaveProperty('_count');
+      expect(res.body.data._count).toHaveProperty('members');
+      expect(res.body.data._count).toHaveProperty('sessions');
+      expect(res.body.data._count).toHaveProperty('courts');
     });
 
     it('should return 404 when club not found', async () => {
       await request(ctx.app.getHttpServer())
-        .get('/api/sport-clubs/99999')
+        .get('/api/sport-clubs/nonexistent-club')
         .set(authHeader(ctx.accessToken))
         .expect(404);
     });
 
     it('should return 401 without JWT token', async () => {
       await request(ctx.app.getHttpServer())
-        .get(`/api/sport-clubs/${testClubId}`)
+        .get(`/api/sport-clubs/${testClubSlug}`)
         .expect(401);
     });
   });
 
-  describe('PATCH /api/sport-clubs/:id', () => {
-    let testClubId: number;
-    let otherUserClubId: number;
+  describe('PATCH /api/sport-clubs/:slug', () => {
+    let testClubSlug: string;
+    let otherUserClubSlug: string;
 
     beforeAll(async () => {
       // Create club owned by test user via API
@@ -144,7 +148,7 @@ describe('SportClubs (e2e)', () => {
         .post('/api/sport-clubs')
         .set(authHeader(ctx.accessToken))
         .send({ name: 'Update Test Club' });
-      testClubId = clubRes.body.id;
+      testClubSlug = clubRes.body.data.slug;
 
       // Create another user and their club directly in DB
       const otherUser = await ctx.prisma.user.create({
@@ -155,24 +159,28 @@ describe('SportClubs (e2e)', () => {
         },
       });
       const otherClub = await ctx.prisma.sportClub.create({
-        data: { name: 'Other Club', ownerId: otherUser.id },
+        data: {
+          name: 'Other Club',
+          slug: `other-club-${randomUUID()}`,
+          ownerId: otherUser.id,
+        },
       });
-      otherUserClubId = otherClub.id;
+      otherUserClubSlug = otherClub.slug;
     });
 
     it('should update club name when owner', async () => {
       const res = await request(ctx.app.getHttpServer())
-        .patch(`/api/sport-clubs/${testClubId}`)
+        .patch(`/api/sport-clubs/${testClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .send({ name: 'Updated Club Name' })
         .expect(200);
 
-      expect(res.body.name).toBe('Updated Club Name');
+      expect(res.body.data.name).toBe('Updated Club Name');
     });
 
     it('should return 403 when not owner', async () => {
       await request(ctx.app.getHttpServer())
-        .patch(`/api/sport-clubs/${otherUserClubId}`)
+        .patch(`/api/sport-clubs/${otherUserClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .send({ name: 'Hacked Name' })
         .expect(403);
@@ -180,7 +188,7 @@ describe('SportClubs (e2e)', () => {
 
     it('should return 404 when club not found', async () => {
       await request(ctx.app.getHttpServer())
-        .patch('/api/sport-clubs/99999')
+        .patch('/api/sport-clubs/nonexistent-club')
         .set(authHeader(ctx.accessToken))
         .send({ name: 'New Name' })
         .expect(404);
@@ -188,23 +196,23 @@ describe('SportClubs (e2e)', () => {
 
     it('should return 401 without JWT token', async () => {
       await request(ctx.app.getHttpServer())
-        .patch(`/api/sport-clubs/${testClubId}`)
+        .patch(`/api/sport-clubs/${testClubSlug}`)
         .send({ name: 'No Auth' })
         .expect(401);
     });
 
     it('should return 400 with name too long', async () => {
       await request(ctx.app.getHttpServer())
-        .patch(`/api/sport-clubs/${testClubId}`)
+        .patch(`/api/sport-clubs/${testClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .send({ name: 'a'.repeat(101) })
         .expect(400);
     });
   });
 
-  describe('DELETE /api/sport-clubs/:id', () => {
-    let testClubId: number;
-    let otherUserClubId: number;
+  describe('DELETE /api/sport-clubs/:slug', () => {
+    let testClubSlug: string;
+    let otherUserClubSlug: string;
 
     beforeAll(async () => {
       // Create club owned by test user via API
@@ -212,7 +220,7 @@ describe('SportClubs (e2e)', () => {
         .post('/api/sport-clubs')
         .set(authHeader(ctx.accessToken))
         .send({ name: 'Delete Test Club' });
-      testClubId = clubRes.body.id;
+      testClubSlug = clubRes.body.data.slug;
 
       // Create another user and their club directly in DB
       const otherUser = await ctx.prisma.user.create({
@@ -223,14 +231,18 @@ describe('SportClubs (e2e)', () => {
         },
       });
       const otherClub = await ctx.prisma.sportClub.create({
-        data: { name: 'Delete Other Club', ownerId: otherUser.id },
+        data: {
+          name: 'Delete Other Club',
+          slug: `delete-other-club-${randomUUID()}`,
+          ownerId: otherUser.id,
+        },
       });
-      otherUserClubId = otherClub.id;
+      otherUserClubSlug = otherClub.slug;
     });
 
     it('should delete club and return success message when owner', async () => {
       const res = await request(ctx.app.getHttpServer())
-        .delete(`/api/sport-clubs/${testClubId}`)
+        .delete(`/api/sport-clubs/${testClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .expect(200);
 
@@ -239,21 +251,21 @@ describe('SportClubs (e2e)', () => {
 
     it('should return 403 when not owner', async () => {
       await request(ctx.app.getHttpServer())
-        .delete(`/api/sport-clubs/${otherUserClubId}`)
+        .delete(`/api/sport-clubs/${otherUserClubSlug}`)
         .set(authHeader(ctx.accessToken))
         .expect(403);
     });
 
     it('should return 404 when club not found', async () => {
       await request(ctx.app.getHttpServer())
-        .delete('/api/sport-clubs/99999')
+        .delete('/api/sport-clubs/nonexistent-club')
         .set(authHeader(ctx.accessToken))
         .expect(404);
     });
 
     it('should return 401 without JWT token', async () => {
       await request(ctx.app.getHttpServer())
-        .delete(`/api/sport-clubs/${otherUserClubId}`)
+        .delete(`/api/sport-clubs/${otherUserClubSlug}`)
         .expect(401);
     });
   });

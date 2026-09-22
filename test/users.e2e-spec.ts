@@ -26,8 +26,8 @@ describe('Users (e2e)', () => {
         .send({ username: 'newusername' })
         .expect(200);
 
-      expect(res.body.username).toBe('newusername');
-      expect(res.body.id).toBe(ctx.testUser.id);
+      expect(res.body.data.username).toBe('newusername');
+      expect(res.body.data.id).toBe(ctx.testUser.id);
     });
 
     it('should update gender', async () => {
@@ -37,7 +37,7 @@ describe('Users (e2e)', () => {
         .send({ gender: 'FEMALE' })
         .expect(200);
 
-      expect(res.body.gender).toBe('FEMALE');
+      expect(res.body.data.gender).toBe('FEMALE');
     });
 
     it('should update both username and gender', async () => {
@@ -47,8 +47,8 @@ describe('Users (e2e)', () => {
         .send({ username: 'bothupdated', gender: 'MALE' })
         .expect(200);
 
-      expect(res.body.username).toBe('bothupdated');
-      expect(res.body.gender).toBe('MALE');
+      expect(res.body.data.username).toBe('bothupdated');
+      expect(res.body.data.gender).toBe('MALE');
     });
 
     it('should return 409 when username is already taken', async () => {

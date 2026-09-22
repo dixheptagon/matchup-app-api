@@ -25,10 +25,10 @@ describe('Auth (e2e)', () => {
         .send({ refreshToken: ctx.refreshToken })
         .expect(200);
 
-      expect(res.body).toHaveProperty('accessToken');
-      expect(res.body).toHaveProperty('refreshToken');
-      expect(res.body).toHaveProperty('user');
-      expect(res.body.user.id).toBe(ctx.testUser.id);
+      expect(res.body.data).toHaveProperty('accessToken');
+      expect(res.body.data).toHaveProperty('refreshToken');
+      expect(res.body.data).toHaveProperty('user');
+      expect(res.body.data.user.id).toBe(ctx.testUser.id);
     });
 
     it('should return 401 with invalid refresh token', async () => {
@@ -85,11 +85,11 @@ describe('Auth (e2e)', () => {
         .set(authHeader(ctx.accessToken))
         .expect(200);
 
-      expect(res.body.id).toBe(ctx.testUser.id);
-      expect(res.body.name).toBe(ctx.testUser.name);
-      expect(res.body.email).toBe(ctx.testUser.email);
-      expect(res.body).toHaveProperty('isVerified');
-      expect(res.body).toHaveProperty('createdAt');
+      expect(res.body.data.id).toBe(ctx.testUser.id);
+      expect(res.body.data.name).toBe(ctx.testUser.name);
+      expect(res.body.data.email).toBe(ctx.testUser.email);
+      expect(res.body.data).toHaveProperty('isVerified');
+      expect(res.body.data).toHaveProperty('createdAt');
     });
 
     it('should return 401 without JWT token', async () => {
@@ -109,8 +109,8 @@ describe('Auth (e2e)', () => {
         .set(authHeader(ctx.accessToken))
         .expect(200);
 
-      expect(res.body.username).toBe(ctx.testUser.username);
-      expect(res.body.gender).toBe(ctx.testUser.gender);
+      expect(res.body.data.username).toBe(ctx.testUser.username);
+      expect(res.body.data.gender).toBe(ctx.testUser.gender);
     });
   });
 });
