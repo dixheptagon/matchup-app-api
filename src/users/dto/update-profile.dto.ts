@@ -24,10 +24,9 @@ export class UpdateProfileDto {
   @MinLength(3, { message: 'Username must be at least 3 characters' })
   @MaxLength(100, { message: 'Username must not exceed 100 characters' })
   @Matches(/^[a-zA-Z0-9_.]+$/, {
-    message:
-      'Username may only contain letters, numbers, underscores and dots',
+    message: 'Username may only contain letters, numbers, underscores and dots',
   })
-  @ContainsLetter()
+  @ContainsLetter(3, { label: 'Username' })
   username?: string;
 
   @IsOptional()

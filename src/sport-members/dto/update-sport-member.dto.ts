@@ -16,7 +16,7 @@ export class UpdateSportMemberDto {
   @IsOptional()
   @IsString({ message: 'Display name must be a string' })
   @MaxLength(100, { message: 'Display name must not exceed 100 characters' })
-  @ContainsLetter()
+  @ContainsLetter(3, { label: 'Display name' })
   displayName?: string;
 
   @IsOptional()

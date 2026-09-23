@@ -7,6 +7,6 @@ export class UpdateSportClubDto {
   @IsOptional()
   @IsString({ message: 'Name must be a string' })
   @MaxLength(100, { message: 'Club name must not exceed 100 characters' })
-  @ContainsLetter()
+  @ContainsLetter(3, { label: 'Club name' })
   name?: string;
 }

@@ -18,7 +18,7 @@ export class CreateSportMemberDto {
   @IsString({ message: 'Display name must be a string' })
   @IsNotEmpty({ message: 'Display name is required' })
   @MaxLength(100, { message: 'Display name must not exceed 100 characters' })
-  @ContainsLetter()
+  @ContainsLetter(3, { label: 'Display name' })
   displayName: string;
 
   @IsOptional()

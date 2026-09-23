@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SportClubsModule } from './sport-clubs/sport-clubs.module.js';
 import { SportMembersModule } from './sport-members/sport-members.module.js';
+import { SportCourtsModule } from './sport-courts/sport-courts.module.js';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
@@ -28,6 +29,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor.
     AuthModule,
     SportClubsModule,
     SportMembersModule,
+    SportCourtsModule,
   ],
   controllers: [AppController],
   providers: [

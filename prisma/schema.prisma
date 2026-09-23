@@ -348,6 +348,9 @@ model Court {
 
   club          SportClub      @relation(fields: [clubId], references: [id], onDelete: Cascade)
   sessionCourts SessionCourt[]
+
+  @@unique([clubId, name])
+  @@index([clubId, displayOrder])
 }
 
 model SessionCourt {
