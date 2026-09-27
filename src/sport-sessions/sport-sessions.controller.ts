@@ -37,10 +37,7 @@ export class SportSessionsController {
   constructor(private readonly sportSessionsService: SportSessionsService) {}
 
   @Post()
-  async create(
-    @CurrentClub() club: SportClub,
-    @Body() dto: CreateSessionDto,
-  ) {
+  async create(@CurrentClub() club: SportClub, @Body() dto: CreateSessionDto) {
     return this.sportSessionsService.create(club, dto);
   }
 
@@ -49,12 +46,7 @@ export class SportSessionsController {
     @CurrentClub() club: SportClub,
     @Query() query: SessionQueryDto,
   ) {
-    return this.sportSessionsService.findAllByClub(
-      club,
-      query.page ?? 1,
-      query.limit ?? 20,
-      query,
-    );
+    return this.sportSessionsService.findAllByClub(club, query);
   }
 
   @Get(':sessionId')

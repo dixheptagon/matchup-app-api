@@ -74,7 +74,9 @@ export class SportSessionsService {
       where: { clubId: club.id },
     });
 
-    const settings = buildSessionSettings(clubSettings ?? DEFAULT_CLUB_SETTINGS);
+    const settings = buildSessionSettings(
+      clubSettings ?? DEFAULT_CLUB_SETTINGS,
+    );
     const title = dto.title?.trim() || buildFallbackTitle(dto.type);
     const slug = await generateUniqueSlug(title, this.prisma, 'sportSession');
 
@@ -93,12 +95,9 @@ export class SportSessionsService {
     });
   }
 
-  async findAllByClub(
-    club: SportClub,
-    page = 1,
-    limit = 20,
-    query: SessionQueryDto = {},
-  ) {
+  async findAllByClub(club: SportClub, query: SessionQueryDto = {}) {
+    const { page = 1, limit = 20 } = query;
+
     const where: {
       clubId: string;
       status?: SessionStatus;
@@ -134,9 +133,9 @@ export class SportSessionsService {
     return session;
   }
 
-  async findPublicBySlug(slug: string) {
+  async findPublicBySlug(club: SportClub, slug: string) {
     const session = await this.prisma.sportSession.findUnique({
-      where: { slug },
+      where: { slug, clubId: club.id },
       select: PUBLIC_SESSION_SELECT,
     });
 
@@ -177,10 +176,7 @@ export class SportSessionsService {
     });
   }
 
-  async updateSettings(
-    session: SessionContext,
-    dto: UpdateSessionSettingsDto,
-  ) {
+  async updateSettings(session: SessionContext, dto: UpdateSessionSettingsDto) {
     if (session.status === SessionStatus.ACTIVE) {
       const invalid = getLockedActiveSettings(dto);
 
