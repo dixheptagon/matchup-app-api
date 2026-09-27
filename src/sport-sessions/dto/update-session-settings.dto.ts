@@ -18,7 +18,7 @@ import {
 
 const isDefined = (_: unknown, value: unknown) => value !== undefined;
 
-export class UpdateClubSettingsDto {
+export class UpdateSessionSettingsDto {
   // ─── GENERAL ───────────────────────────────────────────
   @ValidateIf(isDefined)
   @IsEnum(SportType, { message: 'defaultSport is invalid' })

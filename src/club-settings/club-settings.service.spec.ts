@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { ClubSettingsService } from './club-settings.service.js';
 import { PrismaService } from '../config/prisma/prisma.service.js';
 import type { SportClub } from '../../prisma/generated/prisma/client.js';
@@ -84,10 +84,18 @@ describe('ClubSettingsService', () => {
       });
     });
 
-    it('should throw NotFoundException when settings do not exist', async () => {
+    it('should return default settings when none exist', async () => {
       mockPrisma.clubSettings.findUnique.mockResolvedValue(null);
 
-      await expect(service.find(mockClub)).rejects.toThrow(NotFoundException);
+      const result = await service.find(mockClub);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: null,
+          clubId: 'club-1',
+          defaultSport: 'BADMINTON',
+        }),
+      );
     });
   });
 

@@ -15,6 +15,7 @@ export const DEFAULT_CLUB_SETTINGS = {
   attendanceCheckIn: true,
   lateJoinerPolicy: LateJoinerPolicy.EQUAL_PLAY_CATCHUP,
   leaderBoardMode: ScoringType.OFF,
+  pointsToWin: 21,
   queueDepth: 10,
 
   // MATCHMAKING
