@@ -13,6 +13,9 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { SportSessionsService } from './sport-sessions.service.js';
+import { SessionSettingsService } from './session-settings.service.js';
+import { SessionCourtsService } from './session-courts.service.js';
+import { SessionPlayersService } from './session-players.service.js';
 import { CreateSessionDto } from './dto/create-session.dto.js';
 import { UpdateSessionDetailsDto } from './dto/update-session-details.dto.js';
 import { UpdateSessionSettingsDto } from './dto/update-session-settings.dto.js';
@@ -34,7 +37,14 @@ import type { SportClub } from '../../prisma/generated/prisma/client.js';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('owner', 'admin')
 export class SportSessionsController {
-  constructor(private readonly sportSessionsService: SportSessionsService) {}
+  constructor(
+    private readonly sportSessionsService: SportSessionsService,
+    private readonly sessionSettingsService: SessionSettingsService,
+    private readonly sessionCourtsService: SessionCourtsService,
+    private readonly sessionPlayersService: SessionPlayersService,
+  ) {}
+
+  // Session Info
 
   @Post()
   async create(@CurrentClub() club: SportClub, @Body() dto: CreateSessionDto) {
@@ -72,6 +82,8 @@ export class SportSessionsController {
     return this.sportSessionsService.remove(session);
   }
 
+  // Session Settings
+
   @Patch(':sessionId/settings')
   @UseGuards(SessionGuard)
   @SessionStatuses(SessionStatus.DRAFT, SessionStatus.ACTIVE)
@@ -79,8 +91,10 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: UpdateSessionSettingsDto,
   ) {
-    return this.sportSessionsService.updateSettings(session, dto);
+    return this.sessionSettingsService.updateSettings(session, dto);
   }
+
+  // Session Courts
 
   @Put(':sessionId/courts')
   @UseGuards(SessionGuard)
@@ -89,7 +103,7 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: SetSessionCourtsDto,
   ) {
-    return this.sportSessionsService.setCourts(session, dto);
+    return this.sessionCourtsService.setCourts(session, dto);
   }
 
   @Post(':sessionId/courts')
@@ -99,7 +113,7 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: SetSessionCourtsDto,
   ) {
-    return this.sportSessionsService.addCourts(session, dto);
+    return this.sessionCourtsService.addCourts(session, dto);
   }
 
   @Delete(':sessionId/courts/:sessionCourtId')
@@ -109,8 +123,10 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Param('sessionCourtId', ParseIntPipe) sessionCourtId: number,
   ) {
-    return this.sportSessionsService.removeCourt(session, sessionCourtId);
+    return this.sessionCourtsService.removeCourt(session, sessionCourtId);
   }
+
+  // Session Players
 
   @Put(':sessionId/players')
   @UseGuards(SessionGuard)
@@ -119,7 +135,7 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: SetSessionPlayersDto,
   ) {
-    return this.sportSessionsService.setPlayers(session, dto);
+    return this.sessionPlayersService.setPlayers(session, dto);
   }
 
   @Post(':sessionId/players')
@@ -129,7 +145,7 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: SetSessionPlayersDto,
   ) {
-    return this.sportSessionsService.addPlayers(session, dto);
+    return this.sessionPlayersService.addPlayers(session, dto);
   }
 
   @Post(':sessionId/players/guest')
@@ -139,7 +155,7 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Body() dto: CreateGuestPlayerDto,
   ) {
-    return this.sportSessionsService.addGuest(session, dto);
+    return this.sessionPlayersService.addGuest(session, dto);
   }
 
   @Delete(':sessionId/players/:sessionPlayerId')
@@ -149,8 +165,10 @@ export class SportSessionsController {
     @CurrentSession() session: SessionContext,
     @Param('sessionPlayerId', ParseIntPipe) sessionPlayerId: number,
   ) {
-    return this.sportSessionsService.removePlayer(session, sessionPlayerId);
+    return this.sessionPlayersService.removePlayer(session, sessionPlayerId);
   }
+
+  // Start Session
 
   @Post(':sessionId/start')
   @UseGuards(SessionGuard)

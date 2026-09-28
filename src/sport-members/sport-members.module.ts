@@ -13,5 +13,6 @@ import { JwtModule } from '@nestjs/jwt';
   ],
   controllers: [SportMembersController],
   providers: [SportMembersService, JwtStrategy, RolesGuard],
+  exports: [SportMembersService],
 })
 export class SportMembersModule {}

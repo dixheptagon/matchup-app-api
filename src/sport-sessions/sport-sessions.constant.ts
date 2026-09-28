@@ -1,5 +1,7 @@
 import type { Prisma } from '../../prisma/generated/prisma/client.js';
 
+// TODO : Refactor include while developing FE
+// Return only the fields that are needed for FE
 export const SESSION_DETAIL_INCLUDE = {
   sessionSettings: true,
   sessionCourts: { include: { court: true } },

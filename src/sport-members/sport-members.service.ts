@@ -14,7 +14,7 @@ import {
   RoleType,
   SkillLevel,
 } from '../../prisma/generated/prisma/enums.js';
-import { SportClub } from '../../prisma/generated/prisma/client.js';
+import { Prisma, SportClub } from '../../prisma/generated/prisma/client.js';
 
 const MEMBER_SELECT = {
   id: true,
@@ -54,10 +54,30 @@ export class SportMembersService {
   }
 
   async create(club: SportClub, dto: CreateSportMemberDto) {
-    const duplicate = await this.prisma.clubMember.findFirst({
+    return this.createMember({
+      clubId: club.id,
+      displayName: dto.displayName,
+      isGuest: dto.isGuest,
+      gender: dto.gender,
+      skillLevel: dto.skillLevel,
+    });
+  }
+
+  async createMember(
+    data: {
+      clubId: string;
+      displayName: string;
+      isGuest?: boolean;
+      gender?: GenderType;
+      skillLevel?: SkillLevel;
+      createdBySessionId?: string;
+    },
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    const duplicate = await client.clubMember.findFirst({
       where: {
-        clubId: club.id,
-        displayName: { equals: dto.displayName, mode: 'insensitive' },
+        clubId: data.clubId,
+        displayName: { equals: data.displayName, mode: 'insensitive' },
       },
     });
 
@@ -65,14 +85,19 @@ export class SportMembersService {
       throw new ConflictException('Member with this name already exists');
     }
 
-    return this.prisma.clubMember.create({
+    return client.clubMember.create({
       data: {
-        clubId: club.id,
-        displayName: dto.displayName,
-        isGuest: dto.isGuest ?? false,
+        clubId: data.clubId,
+        displayName: data.displayName,
+        isGuest: data.isGuest ?? false,
         role: RoleType.MEMBER,
-        ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
-        ...(dto.skillLevel !== undefined ? { skillLevel: dto.skillLevel } : {}),
+        ...(data.createdBySessionId !== undefined
+          ? { createdBySessionId: data.createdBySessionId }
+          : {}),
+        ...(data.gender !== undefined ? { gender: data.gender } : {}),
+        ...(data.skillLevel !== undefined
+          ? { skillLevel: data.skillLevel }
+          : {}),
       },
       select: MEMBER_SELECT,
     });

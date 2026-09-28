@@ -1,17 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
-import { SportSessionsService } from './sport-sessions.service.js';
-import { PrismaService } from '../config/prisma/prisma.service.js';
-import type { SessionContext } from './sport-sessions.types.js';
-import type { SportClub } from '../../prisma/generated/prisma/client.js';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { SportSessionsService } from '../sport-sessions.service.js';
+import { PrismaService } from '../../config/prisma/prisma.service.js';
+import type { SessionContext } from '../sport-sessions.types.js';
+import type { SportClub } from '../../../prisma/generated/prisma/client.js';
 
 describe('SportSessionsService', () => {
   let service: SportSessionsService;
-  let mockPrisma: any;
+  let mockPrisma: {
+    sportSession: {
+      findUnique: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+    };
+    clubSettings: { findUnique: ReturnType<typeof vi.fn> };
+  };
 
   const mockClub: SportClub = {
     id: 'club-1',
@@ -68,35 +74,7 @@ describe('SportSessionsService', () => {
         count: vi.fn(),
       },
       clubSettings: { findUnique: vi.fn() },
-      sessionSettings: { update: vi.fn() },
-      sessionCourt: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-        createMany: vi.fn(),
-        deleteMany: vi.fn(),
-        delete: vi.fn(),
-      },
-      sessionPlayer: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-        createMany: vi.fn(),
-        create: vi.fn(),
-        deleteMany: vi.fn(),
-        delete: vi.fn(),
-      },
-      clubMember: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-        create: vi.fn(),
-      },
-      court: { findMany: vi.fn() },
-      sessionMatch: { count: vi.fn() },
-      matchPlayer: { count: vi.fn() },
     };
-    mockPrisma.$transaction = vi.fn(
-      async (arg: ((tx: unknown) => Promise<unknown>) | Promise<unknown>[]) =>
-        typeof arg === 'function' ? arg(mockPrisma) : Promise.all(arg),
-    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -171,7 +149,9 @@ describe('SportSessionsService', () => {
       mockPrisma.sportSession.findMany.mockResolvedValue([mockSession]);
       mockPrisma.sportSession.count.mockResolvedValue(1);
 
-      const result = await service.findAllByClub(mockClub, 1, 10, {
+      const result = await service.findAllByClub(mockClub, {
+        page: 1,
+        limit: 10,
         status: 'DRAFT',
       });
 
@@ -194,22 +174,26 @@ describe('SportSessionsService', () => {
   });
 
   describe('findPublicBySlug', () => {
-    it('should return the public projection', async () => {
+    it('should return the public projection scoped to the club', async () => {
       mockPrisma.sportSession.findUnique.mockResolvedValue({
         title: 'Open Play',
       });
 
-      const result = await service.findPublicBySlug('open-play');
+      const result = await service.findPublicBySlug(mockClub, 'open-play');
 
       expect(result).toEqual({ title: 'Open Play' });
+      expect(mockPrisma.sportSession.findUnique).toHaveBeenCalledWith({
+        where: { slug: 'open-play', clubId: 'club-1' },
+        select: expect.any(Object),
+      });
     });
 
     it('should throw NotFoundException when not found', async () => {
       mockPrisma.sportSession.findUnique.mockResolvedValue(null);
 
-      await expect(service.findPublicBySlug('missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findPublicBySlug(mockClub, 'missing'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -239,104 +223,6 @@ describe('SportSessionsService', () => {
       expect(mockPrisma.sportSession.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { title: mockSession.title } }),
       );
-    });
-  });
-
-  describe('updateSettings', () => {
-    it('should allow any field on a draft session', async () => {
-      mockPrisma.sessionSettings.update.mockResolvedValue({});
-
-      await service.updateSettings(mockSession, { defaultSport: 'PADEL' });
-
-      expect(mockPrisma.sessionSettings.update).toHaveBeenCalledWith({
-        where: { sessionId: 'session-1' },
-        data: { defaultSport: 'PADEL' },
-      });
-    });
-
-    it('should allow whitelisted fields while active', async () => {
-      mockPrisma.sessionSettings.update.mockResolvedValue({});
-
-      await service.updateSettings(
-        { ...mockSession, status: 'ACTIVE' },
-        { leaderBoardMode: 'SCORE_DIFF', pointsToWin: 21 },
-      );
-
-      expect(mockPrisma.sessionSettings.update).toHaveBeenCalled();
-    });
-
-    it('should reject non-whitelisted fields while active', async () => {
-      await expect(
-        service.updateSettings(
-          { ...mockSession, status: 'ACTIVE' },
-          { defaultSport: 'PADEL' },
-        ),
-      ).rejects.toThrow(BadRequestException);
-      expect(mockPrisma.sessionSettings.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('setCourts', () => {
-    it('should reject when a court is invalid or inactive', async () => {
-      mockPrisma.court.findMany.mockResolvedValue([{ id: 1 }]);
-
-      await expect(
-        service.setCourts(mockSession, { courtIds: [1, 2] }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should replace the courts on success', async () => {
-      mockPrisma.court.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
-      mockPrisma.sessionCourt.findMany.mockResolvedValue([]);
-
-      await service.setCourts(mockSession, { courtIds: [1, 2] });
-
-      expect(mockPrisma.$transaction).toHaveBeenCalled();
-      expect(mockPrisma.sessionCourt.deleteMany).toHaveBeenCalledWith({
-        where: { sessionId: 'session-1', courtId: { notIn: [1, 2] } },
-      });
-      expect(mockPrisma.sessionCourt.createMany).toHaveBeenCalledWith({
-        data: [
-          { sessionId: 'session-1', courtId: 1 },
-          { sessionId: 'session-1', courtId: 2 },
-        ],
-        skipDuplicates: true,
-      });
-    });
-  });
-
-  describe('addGuest', () => {
-    it('should reject a duplicate display name', async () => {
-      mockPrisma.clubMember.findFirst.mockResolvedValue({ id: 'm1' });
-
-      await expect(
-        service.addGuest(mockSession, { displayName: 'John' }),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('should create the guest member and add them as a player', async () => {
-      mockPrisma.clubMember.findFirst.mockResolvedValue(null);
-      mockPrisma.clubMember.create.mockResolvedValue({
-        id: 'guest-1',
-        displayName: 'John',
-      });
-      mockPrisma.sessionPlayer.create.mockResolvedValue({ id: 10 });
-
-      const result = await service.addGuest(mockSession, {
-        displayName: 'John',
-      });
-
-      expect(mockPrisma.clubMember.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            clubId: 'club-1',
-            displayName: 'John',
-            isGuest: true,
-            createdBySessionId: 'session-1',
-          }),
-        }),
-      );
-      expect(result).toEqual({ id: 10 });
     });
   });
 
