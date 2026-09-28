@@ -44,7 +44,7 @@ export class SportMemberQueryDto {
     return value;
   })
   @IsBoolean({ message: 'isGuest must be a boolean' })
-  isGuest?: boolean;
+  isGuest?: boolean = false;
 
   @IsOptional()
   @IsString({ message: 'Search must be a string' })

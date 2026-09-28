@@ -53,6 +53,8 @@ export class SessionCourtsService {
   }
 
   // TODO : Remove addCourts and removeCourt service and use setCourts instead
+  // Add master courts -> auto add to session courts
+  // Remove master courts -> auto remove from session courts
   async addCourts(session: SessionContext, dto: SetSessionCourtsDto) {
     const courtIds = await this.assertCourtsBelong(
       session.clubId,
