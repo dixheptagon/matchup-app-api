@@ -5,5 +5,6 @@ export interface SessionContext {
   clubId: string;
   status: SessionStatus;
   title: string | null;
+  sessionSettings?: { attendanceCheckIn: boolean } | null;
   _count: { sessionCourts: number; players: number };
 }
