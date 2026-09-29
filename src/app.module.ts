@@ -16,6 +16,7 @@ import { SportSessionsModule } from './sport-sessions/draft/sport-sessions.modul
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
+import { SessionCheckinModule } from './sport-sessions/start/checkin/session-checkin/session-checkin.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor.
     SportCourtsModule,
     ClubSettingsModule,
     SportSessionsModule,
+    SessionCheckinModule,
   ],
   controllers: [AppController],
   providers: [
