@@ -12,11 +12,10 @@ import { SportClubsModule } from './sport-clubs/sport-clubs.module.js';
 import { SportMembersModule } from './sport-members/sport-members.module.js';
 import { SportCourtsModule } from './sport-courts/sport-courts.module.js';
 import { ClubSettingsModule } from './club-settings/club-settings.module.js';
-import { SportSessionsModule } from './sport-sessions/draft/sport-sessions.module.js';
+import { SportSessionsModule } from './sport-sessions/sport-sessions.module.js';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
-import { SessionCheckinModule } from './sport-sessions/start/checkin-checkout/session-checkin.module.js';
 
 @Module({
   imports: [
@@ -35,7 +34,6 @@ import { SessionCheckinModule } from './sport-sessions/start/checkin-checkout/se
     SportCourtsModule,
     ClubSettingsModule,
     SportSessionsModule,
-    SessionCheckinModule,
   ],
   controllers: [AppController],
   providers: [
