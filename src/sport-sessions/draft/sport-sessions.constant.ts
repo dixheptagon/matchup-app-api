@@ -1,4 +1,4 @@
-import type { Prisma } from '../../prisma/generated/prisma/client.js';
+import type { Prisma } from '../../../prisma/generated/prisma/client.js';
 
 // TODO : Refactor include while developing FE
 // Return only the fields that are needed for FE

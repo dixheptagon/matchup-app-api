@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../config/prisma/prisma.service.js';
+import { PrismaService } from '../../config/prisma/prisma.service.js';
 import { SetSessionCourtsDto } from './dto/set-session-courts.dto.js';
 import type { SessionContext } from './sport-sessions.types.js';
 

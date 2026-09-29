@@ -6,7 +6,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-import { SessionsType } from '../../../prisma/generated/prisma/enums.js';
+import { SessionsType } from '../../../../prisma/generated/prisma/enums.js';
 
 export class UpdateSessionDetailsDto {
   @Transform(({ value }) => value?.trim())

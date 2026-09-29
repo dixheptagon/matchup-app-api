@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SportSessionsService } from '../sport-sessions.service.js';
-import { PrismaService } from '../../config/prisma/prisma.service.js';
+import { PrismaService } from '../../../config/prisma/prisma.service.js';
 import type { SessionContext } from '../sport-sessions.types.js';
-import type { SportClub } from '../../../prisma/generated/prisma/client.js';
+import type { SportClub } from '../../../../prisma/generated/prisma/client.js';
 
 describe('SportSessionsService', () => {
   let service: SportSessionsService;

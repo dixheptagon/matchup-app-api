@@ -14,7 +14,7 @@ import {
   PriorityLevel,
   ScoringType,
   SportType,
-} from '../../../prisma/generated/prisma/enums.js';
+} from '../../../../prisma/generated/prisma/enums.js';
 
 const isDefined = (_: unknown, value: unknown) => value !== undefined;
 

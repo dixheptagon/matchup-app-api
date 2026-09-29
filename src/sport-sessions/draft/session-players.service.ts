@@ -3,8 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../config/prisma/prisma.service.js';
-import { SportMembersService } from '../sport-members/sport-members.service.js';
+import { PrismaService } from '../../config/prisma/prisma.service.js';
+import { SportMembersService } from '../../sport-members/sport-members.service.js';
 import { SetSessionPlayersDto } from './dto/set-session-players.dto.js';
 import { CreateGuestPlayerDto } from './dto/create-guest-player.dto.js';
 import type { SessionContext } from './sport-sessions.types.js';

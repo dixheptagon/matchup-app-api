@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { SessionStatus } from '../../../prisma/generated/prisma/enums.js';
+import { SessionStatus } from '../../../../prisma/generated/prisma/enums.js';
 
 export const SESSION_STATUSES_KEY = 'sessionStatuses';
 

@@ -9,7 +9,7 @@ import {
 import {
   GenderType,
   SkillLevel,
-} from '../../../prisma/generated/prisma/enums.js';
+} from '../../../../prisma/generated/prisma/enums.js';
 
 export class CreateGuestPlayerDto {
   @Transform(({ value }) => value?.trim())

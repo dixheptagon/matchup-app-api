@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { SessionSettingsService } from '../session-settings.service.js';
-import { PrismaService } from '../../config/prisma/prisma.service.js';
+import { PrismaService } from '../../../config/prisma/prisma.service.js';
 import type { SessionContext } from '../sport-sessions.types.js';
 
 describe('SessionSettingsService', () => {

@@ -3,12 +3,12 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../config/prisma/prisma.service.js';
+import { PrismaService } from '../../config/prisma/prisma.service.js';
 import { CreateSessionDto } from './dto/create-session.dto.js';
 import { UpdateSessionDetailsDto } from './dto/update-session-details.dto.js';
 import { SessionQueryDto } from './dto/session-query.dto.js';
-import { generateUniqueSlug } from '../common/utils/generate-slug.js';
-import { DEFAULT_CLUB_SETTINGS } from '../club-settings/club-settings.constant.js';
+import { generateUniqueSlug } from '../../common/utils/generate-slug.js';
+import { DEFAULT_CLUB_SETTINGS } from '../../club-settings/club-settings.constant.js';
 import {
   buildFallbackTitle,
   buildSessionSettings,
@@ -23,8 +23,8 @@ import type { SessionContext } from './sport-sessions.types.js';
 import {
   SessionStatus,
   SessionsType,
-} from '../../prisma/generated/prisma/enums.js';
-import type { SportClub } from '../../prisma/generated/prisma/client.js';
+} from '../../../prisma/generated/prisma/enums.js';
+import type { SportClub } from '../../../prisma/generated/prisma/client.js';
 
 @Injectable()
 export class SportSessionsService {

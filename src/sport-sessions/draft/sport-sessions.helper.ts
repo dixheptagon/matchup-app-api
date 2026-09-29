@@ -1,5 +1,5 @@
-import type { ClubSettings } from '../../prisma/generated/prisma/client.js';
-import { SessionsType } from '../../prisma/generated/prisma/enums.js';
+import type { ClubSettings } from '../../../prisma/generated/prisma/client.js';
+import { SessionsType } from '../../../prisma/generated/prisma/enums.js';
 import { ACTIVE_EDITABLE_SETTINGS } from './sport-sessions.constant.js';
 
 export type SessionSettingsFields = Omit<

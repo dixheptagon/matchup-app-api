@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SessionPlayersService } from '../session-players.service.js';
-import { SportMembersService } from '../../sport-members/sport-members.service.js';
-import { PrismaService } from '../../config/prisma/prisma.service.js';
+import { SportMembersService } from '../../../sport-members/sport-members.service.js';
+import { PrismaService } from '../../../config/prisma/prisma.service.js';
 import type { SessionContext } from '../sport-sessions.types.js';
 
 describe('SessionPlayersService', () => {

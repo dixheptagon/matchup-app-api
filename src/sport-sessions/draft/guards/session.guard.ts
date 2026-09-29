@@ -6,11 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PrismaService } from '../../config/prisma/prisma.service.js';
+import { PrismaService } from '../../../config/prisma/prisma.service.js';
 import { SESSION_GUARD_INCLUDE } from '../sport-sessions.constant.js';
 import { SESSION_STATUSES_KEY } from '../decorators/session-statuses.decorator.js';
-import type { SessionStatus } from '../../../prisma/generated/prisma/enums.js';
-import type { SportClub } from '../../../prisma/generated/prisma/client.js';
+import type { SessionStatus } from '../../../../prisma/generated/prisma/enums.js';
+import type { SportClub } from '../../../../prisma/generated/prisma/client.js';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

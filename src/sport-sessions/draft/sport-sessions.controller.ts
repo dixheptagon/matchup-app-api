@@ -11,7 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { SportSessionsService } from './sport-sessions.service.js';
 import { SessionSettingsService } from './session-settings.service.js';
 import { SessionCourtsService } from './session-courts.service.js';
@@ -23,15 +23,15 @@ import { SetSessionCourtsDto } from './dto/set-session-courts.dto.js';
 import { SetSessionPlayersDto } from './dto/set-session-players.dto.js';
 import { CreateGuestPlayerDto } from './dto/create-guest-player.dto.js';
 import { SessionQueryDto } from './dto/session-query.dto.js';
-import { RolesGuard } from '../sport-members/guards/roles.guard.js';
-import { Roles } from '../sport-members/decorators/roles.decorator.js';
-import { CurrentClub } from '../sport-members/decorators/current-club.decorator.js';
+import { RolesGuard } from '../../sport-members/guards/roles.guard.js';
+import { Roles } from '../../sport-members/decorators/roles.decorator.js';
+import { CurrentClub } from '../../sport-members/decorators/current-club.decorator.js';
 import { SessionGuard } from './guards/session.guard.js';
 import { SessionStatuses } from './decorators/session-statuses.decorator.js';
 import { CurrentSession } from './decorators/current-session.decorator.js';
-import { SessionStatus } from '../../prisma/generated/prisma/enums.js';
+import { SessionStatus } from '../../../prisma/generated/prisma/enums.js';
 import type { SessionContext } from './sport-sessions.types.js';
-import type { SportClub } from '../../prisma/generated/prisma/client.js';
+import type { SportClub } from '../../../prisma/generated/prisma/client.js';
 
 @Controller('sport-clubs/:clubSlug/sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)

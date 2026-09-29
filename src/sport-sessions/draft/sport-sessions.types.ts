@@ -1,4 +1,4 @@
-import type { SessionStatus } from '../../prisma/generated/prisma/enums.js';
+import type { SessionStatus } from '../../../prisma/generated/prisma/enums.js';
 
 export interface SessionContext {
   id: string;

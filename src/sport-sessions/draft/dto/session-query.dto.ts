@@ -3,7 +3,7 @@ import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import {
   SessionStatus,
   SessionsType,
-} from '../../../prisma/generated/prisma/enums.js';
+} from '../../../../prisma/generated/prisma/enums.js';
 
 export class SessionQueryDto {
   @IsOptional()
