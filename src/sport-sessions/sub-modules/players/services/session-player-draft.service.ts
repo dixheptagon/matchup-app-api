@@ -3,11 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../config/prisma/prisma.service.js';
-import { SportMembersService } from '../../../sport-members/sport-members.service.js';
-import { SetSessionPlayersDto } from './dto/set-session-players.dto.js';
-import { SessionContext } from '../../shared/types/sport-sessions.types.js';
-import { CreateGuestPlayerDto } from './dto/create-guest-player.dto.js';
+import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { SportMembersService } from '../../../../sport-members/sport-members.service.js';
+import { SetSessionPlayersDto } from '../dto/set-session-players.dto.js';
+import { SessionContext } from '../../../shared/types/sport-sessions.types.js';
+import { CreateGuestPlayerDto } from '../dto/create-guest-player.dto.js';
 
 @Injectable()
 export class SessionPlayersService {

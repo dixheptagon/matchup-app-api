@@ -1,8 +1,8 @@
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { RolesGuard } from '../../sport-members/guards/roles.guard.js';
-import { CurrentClub } from '../../sport-members/decorators/current-club.decorator.js';
-import type { SportClub } from '../../../prisma/generated/prisma/client.js';
-import { SportSessionsService } from '../sport-sessions.service.js';
+import { RolesGuard } from '../sport-members/guards/roles.guard.js';
+import { CurrentClub } from '../sport-members/decorators/current-club.decorator.js';
+import type { SportClub } from '../../prisma/generated/prisma/client.js';
+import { SportSessionsService } from './sport-sessions.service.js';
 
 @Controller('sport-clubs/:clubSlug/public/sessions')
 @UseGuards(RolesGuard)

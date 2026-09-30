@@ -3,10 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../../config/prisma/prisma.service.js';
-import { CheckInMultiplePlayersDto } from './dto/session-checkin.dto.js';
-import { PlayerStatus } from '../../../../prisma/generated/prisma/enums.js';
-import { SessionContext } from '../../shared/types/sport-sessions.types.js';
+import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { CheckInMultiplePlayersDto } from '../dto/session-checkin.dto.js';
+import { PlayerStatus } from '../../../../../prisma/generated/prisma/enums.js';
+import { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
 @Injectable()
 export class SessionCheckinService {

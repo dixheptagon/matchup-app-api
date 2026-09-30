@@ -9,7 +9,7 @@ import {
   ParseIntPipe,
   Query,
 } from '@nestjs/common';
-import { SessionCheckinService } from './session-checkin.service.js';
+import { SessionCheckinService } from './services/session-checkin.service.js';
 import { SessionStatuses } from '../../shared/decorators/session-statuses.decorator.js';
 import { SessionStatus } from '../../../../prisma/generated/prisma/enums.js';
 import { CurrentSession } from '../../shared/decorators/current-session.decorator.js';

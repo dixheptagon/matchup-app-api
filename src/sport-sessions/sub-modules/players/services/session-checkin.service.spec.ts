@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SessionCheckinService } from './session-checkin.service.js';
-import { PrismaService } from '../../../config/prisma/prisma.service.js';
-import { PlayerStatus } from '../../../../prisma/generated/prisma/enums.js';
-import { SessionContext } from '../../shared/types/sport-sessions.types.js';
+import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { PlayerStatus } from '../../../../../prisma/generated/prisma/enums.js';
+import { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
 describe('SessionCheckinService', () => {
   let service: SessionCheckinService;
