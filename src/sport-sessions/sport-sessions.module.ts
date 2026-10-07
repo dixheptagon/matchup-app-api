@@ -12,11 +12,13 @@ import { SessionCheckinService } from './sub-modules/players/services/session-ch
 import { SportSessionsController } from './sport-sessions.controller.js';
 import { SessionsPublicController } from './sessions.public.controller.js';
 import { SessionPlayersService } from './sub-modules/players/services/session-player-draft.service.js';
-import { PlayerPoolService } from './sub-modules/players/services/session-player-eligibility.service.js';
 import { SessionGuard } from './shared/guards/session.guard.js';
-import { SessionPlayerController } from './sub-modules/players/session-player.controller.js';
+import { SessionPlayerController } from './sub-modules/players/session-player-draft.controller.js';
 import { SessionCourtsController } from './sub-modules/courts/session-courts.controller.js';
 import { SessionSettingsController } from './sub-modules/settings/session-settings.controller.js';
+import { SessionPlayerEligibilityService } from './sub-modules/players/services/session-player-eligibility.service.js';
+import { PlayerWeightingService } from './sub-modules/players/services/player-weighting.service.js';
+import { SessionPlayerEligibilityController } from './sub-modules/players/session-player-eligibility.controller.js';
 
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { SessionSettingsController } from './sub-modules/settings/session-settin
     SessionPlayerController,
     SessionCourtsController,
     SessionSettingsController,
+    SessionPlayerEligibilityController,
   ],
   providers: [
     SportSessionsService,
@@ -41,7 +44,8 @@ import { SessionSettingsController } from './sub-modules/settings/session-settin
     RolesGuard,
     SessionGuard,
     SessionCheckinService,
-    PlayerPoolService,
+    SessionPlayerEligibilityService,
+    PlayerWeightingService,
   ],
 })
 export class SportSessionsModule {}

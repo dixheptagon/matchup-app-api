@@ -11,7 +11,6 @@ import {
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../../sport-members/guards/roles.guard.js';
 import { Roles } from '../../../sport-members/decorators/roles.decorator.js';
-import { SportSessionsService } from '../../sport-sessions.service.js';
 import { SessionPlayersService } from './services/session-player-draft.service.js';
 import { SessionGuard } from '../../shared/guards/session.guard.js';
 import { SessionStatuses } from '../../shared/decorators/session-statuses.decorator.js';
@@ -25,10 +24,7 @@ import { CreateGuestPlayerDto } from './dto/create-guest-player.dto.js';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('owner', 'admin')
 export class SessionPlayerController {
-  constructor(
-    private readonly sportSessionsService: SportSessionsService,
-    private readonly sessionPlayersService: SessionPlayersService,
-  ) {}
+  constructor(private readonly sessionPlayersService: SessionPlayersService) {}
 
   // Session Players
 

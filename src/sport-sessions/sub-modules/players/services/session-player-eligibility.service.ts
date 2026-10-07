@@ -5,32 +5,54 @@ import {
   PlayerStatus,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
+import { PlayerWeightingService } from './player-weighting.service.js';
 
 @Injectable()
-export class PlayerPoolService {
-  constructor(private readonly prisma: PrismaService) {}
+export class SessionPlayerEligibilityService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly playerWeighting: PlayerWeightingService,
+  ) {}
 
   async getEligiblePlayers(session: SessionContext) {
-    return this.prisma.sessionPlayer.findMany({
-      where: {
-        sessionId: session.id,
-        status: PlayerStatus.WAITING,
-        matchPlayers: {
-          none: {
-            match: {
-              status: {
-                in: [
-                  MatchStatus.QUEUED,
-                  MatchStatus.READY,
-                  MatchStatus.PLAYING,
-                ],
-              },
+    const whereCondition = {
+      sessionId: session.id,
+      status: PlayerStatus.WAITING,
+      matchPlayers: {
+        none: {
+          match: {
+            status: {
+              in: [MatchStatus.QUEUED, MatchStatus.READY, MatchStatus.PLAYING],
             },
           },
         },
       },
-      include: { clubMember: true },
-      orderBy: [{ checkedInAt: 'asc' }, { id: 'asc' }],
-    });
+    };
+
+    const [players, totalCount] = await this.prisma.$transaction([
+      this.prisma.sessionPlayer.findMany({
+        where: whereCondition,
+        include: {
+          clubMember: true,
+          _count: {
+            select: {
+              matchPlayers: true,
+            },
+          },
+        },
+        orderBy: [{ checkedInAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.sessionPlayer.count({
+        where: whereCondition,
+      }),
+    ]);
+
+    return {
+      data: this.playerWeighting.weight(players, session),
+      meta: {
+        total: totalCount,
+        sessionId: session.id,
+      },
+    };
   }
 }

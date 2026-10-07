@@ -1,6 +1,7 @@
 // TODO : Refactor include while developing FE
 
 import { Prisma } from '../../../../prisma/generated/prisma/client.js';
+import { PriorityLevel } from '../../../../prisma/generated/prisma/enums.js';
 
 // Return only the fields that are needed for FE
 export const SESSION_DETAIL_INCLUDE = {
@@ -43,3 +44,14 @@ export const ACTIVE_EDITABLE_SETTINGS: readonly string[] = [
 
 export const MIN_COURTS_TO_START = 1;
 export const MIN_PLAYERS_TO_START = 4;
+
+// ─── Fairness weighting ──────────────────────────────────
+
+export const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+  MAX: 4,
+};
+
+export const LATE_JOINER_CATCHUP_BONUS = 1.5;
