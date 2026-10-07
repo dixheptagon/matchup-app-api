@@ -55,3 +55,7 @@ export const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
 };
 
 export const LATE_JOINER_CATCHUP_BONUS = 1.5;
+
+// Games a player must complete before their play count is considered
+// meaningful under LateJoinerPolicy.MIN_SESSION_PLAY.
+export const MIN_SESSION_PLAY_COUNT = 2;

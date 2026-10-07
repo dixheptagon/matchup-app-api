@@ -4,12 +4,19 @@ import { LateJoinerPolicy } from '../../../../../prisma/generated/prisma/enums.j
 import { DEFAULT_CLUB_SETTINGS } from '../../../../club-settings/club-settings.constant.js';
 import {
   LATE_JOINER_CATCHUP_BONUS,
+  MIN_SESSION_PLAY_COUNT,
   PRIORITY_WEIGHTS,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type {
   SessionContext,
   SessionContextSettings,
 } from '../../../shared/types/sport-sessions.types.js';
+
+/** Score assigned when a signal cannot differentiate (e.g. an all-equal pool). */
+const NEUTRAL_SCORE = 0.5;
+
+/** Top of the 0..1 signal range, used to pin a player to the front. */
+const PRIORITY_SCORE = 1;
 
 export type WeightablePlayer = Pick<
   SessionPlayer,
@@ -39,14 +46,23 @@ export class PlayerWeightingService {
     if (players.length === 0) return [];
 
     const settings = this.resolveSettings(session);
+    const policy = settings.lateJoinerPolicy;
     const weights = {
       equalPlay: PRIORITY_WEIGHTS[settings.equalPlayPriority],
       waitingTime: PRIORITY_WEIGHTS[settings.prioritizeWaitingPlayers],
     };
 
-    const playScores = this.normalize(
-      players.map((player) => player.playCount ?? 0),
-      true,
+    const rawCounts = players.map((player) => player.playCount ?? 0);
+    const arrivals = players.map((player) =>
+      this.arrivalRatio(player, session, now),
+    );
+
+    const adjustedCounts = this.adjustPlayCounts(rawCounts, arrivals, policy);
+
+    const playScores = this.resolvePlayScores(
+      this.normalize(adjustedCounts, true),
+      rawCounts,
+      policy,
     );
 
     const waitScores = this.normalize(
@@ -54,12 +70,7 @@ export class PlayerWeightingService {
       false,
     );
 
-    const arrivals = players.map((player) =>
-      this.arrivalRatio(player, session, now),
-    );
-
-    const applyCatchup =
-      settings.lateJoinerPolicy === LateJoinerPolicy.EQUAL_PLAY_CATCHUP;
+    const applyCatchup = policy === LateJoinerPolicy.EQUAL_PLAY_CATCHUP;
 
     const totals = players.map((player, index) => {
       const catchup =
@@ -107,6 +118,44 @@ export class PlayerWeightingService {
     });
   }
 
+  /**
+   * SESSION_AVERAGE pulls a late joiner's effective play count toward the pool
+   * average, scaled by how late they arrived. On-time players (arrivalRatio 0)
+   * keep their raw count.
+   */
+  private adjustPlayCounts(
+    counts: number[],
+    arrivals: number[],
+    policy: LateJoinerPolicy,
+  ): number[] {
+    if (policy !== LateJoinerPolicy.SESSION_AVERAGE) return counts;
+
+    const average =
+      counts.reduce((sum, value) => sum + value, 0) / counts.length;
+
+    return counts.map(
+      (count, index) => count + (average - count) * arrivals[index],
+    );
+  }
+
+  /**
+   * MIN_SESSION_PLAY pins the play-count signal to the top of the range for
+   * players who have not completed enough games, so the least-experienced
+   * players (typically late joiners) are served first. Ties inside that group
+   * are resolved by waiting time, then FIFO.
+   */
+  private resolvePlayScores(
+    scores: number[],
+    counts: number[],
+    policy: LateJoinerPolicy,
+  ): number[] {
+    if (policy !== LateJoinerPolicy.MIN_SESSION_PLAY) return scores;
+
+    return scores.map((score, index) =>
+      counts[index] < MIN_SESSION_PLAY_COUNT ? PRIORITY_SCORE : score,
+    );
+  }
+
   private resolveSettings(session: SessionContext) {
     const settings: Partial<SessionContextSettings> =
       session.sessionSettings ?? {};
@@ -128,7 +177,7 @@ export class PlayerWeightingService {
     const min = Math.min(...values);
     const max = Math.max(...values);
 
-    if (max === min) return values.map(() => 0.5);
+    if (max === min) return values.map(() => NEUTRAL_SCORE);
 
     return values.map((value) =>
       lowerIsBetter ? (max - value) / (max - min) : (value - min) / (max - min),
