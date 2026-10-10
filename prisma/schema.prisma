@@ -34,13 +34,6 @@ enum ScoringType {
   SCORE_DIFF
 }
 
-enum MatchMakingType {
-  CUSTOM
-  LOOSE_SOCIAL
-  SKILL_STRICT
-  BALANCED
-}
-
 enum PriorityLevel {
   LOW
   MEDIUM
@@ -210,7 +203,7 @@ model ClubSettings {
 
   // MATCHMAKING
   autoMatchMaking          Boolean         @default(true)
-  matchMakingMode          MatchMakingType @default(BALANCED)
+  matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)
   partnerVariety           PriorityLevel   @default(MEDIUM)
@@ -218,8 +211,6 @@ model ClubSettings {
   prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
   minimumRestTime          Int?
 
-  carryBalance     PriorityLevel         @default(LOW)
-  carryEvaluation  PriorityLevel         @default(LOW)
   genderPreference GenderPreferenceType?
 
   fairnessThreshold Int?
@@ -271,7 +262,7 @@ model SessionSettings {
 
   // MATCHMAKING
   autoMatchMaking          Boolean         @default(true)
-  matchMakingMode          MatchMakingType @default(BALANCED)
+  matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)
   partnerVariety           PriorityLevel   @default(MEDIUM)
@@ -279,8 +270,6 @@ model SessionSettings {
   prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
   minimumRestTime          Int?
 
-  carryBalance     PriorityLevel         @default(LOW)
-  carryEvaluation  PriorityLevel         @default(LOW)
   genderPreference GenderPreferenceType?
 
   fairnessThreshold Int?
@@ -321,7 +310,6 @@ model SessionPlayer {
   sessionId    String
   clubMemberId String
   playCount    Int?
-  restCount    Int?
   status       PlayerStatus @default(NOT_ARRIVED)
 
   checkedInAt         DateTime?

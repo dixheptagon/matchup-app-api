@@ -10,7 +10,7 @@ import {
 import {
   GenderPreferenceType,
   LateJoinerPolicy,
-  MatchMakingType,
+  MatchMakingMode,
   PriorityLevel,
   ScoringType,
   SportType,
@@ -62,8 +62,8 @@ export class UpdateClubSettingsDto {
   autoMatchMaking?: boolean;
 
   @ValidateIf(isDefined)
-  @IsEnum(MatchMakingType, { message: 'matchMakingMode is invalid' })
-  matchMakingMode?: MatchMakingType;
+  @IsEnum(MatchMakingMode, { message: 'matchMakingMode is invalid' })
+  matchMakingMode?: MatchMakingMode;
 
   @ValidateIf(isDefined)
   @IsEnum(PriorityLevel, { message: 'equalPlayPriority is invalid' })
@@ -90,14 +90,6 @@ export class UpdateClubSettingsDto {
   @Min(0, { message: 'minimumRestTime must be at least 0' })
   @Max(120, { message: 'minimumRestTime must not exceed 120' })
   minimumRestTime?: number | null;
-
-  @ValidateIf(isDefined)
-  @IsEnum(PriorityLevel, { message: 'carryBalance is invalid' })
-  carryBalance?: PriorityLevel;
-
-  @ValidateIf(isDefined)
-  @IsEnum(PriorityLevel, { message: 'carryEvaluation is invalid' })
-  carryEvaluation?: PriorityLevel;
 
   @IsOptional()
   @IsEnum(GenderPreferenceType, { message: 'genderPreference is invalid' })

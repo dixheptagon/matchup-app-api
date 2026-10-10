@@ -61,7 +61,6 @@ export class SessionCheckinService {
       status,
       checkedInAt: new Date(),
       playCount: 0,
-      restCount: 0,
     };
   }
 

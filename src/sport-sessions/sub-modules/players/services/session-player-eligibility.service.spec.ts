@@ -84,17 +84,14 @@ describe('SessionPlayerEligibilityService', () => {
       );
     });
 
-    it('should include clubMember and the matchPlayers count', async () => {
+    it('should include clubMember and order by wait time then id', async () => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
       mockPrisma.sessionPlayer.count.mockResolvedValue(0);
 
       await service.getEligiblePlayers(mockSession);
 
       const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
-      expect(args.include).toEqual({
-        clubMember: true,
-        _count: { select: { matchPlayers: true } },
-      });
+      expect(args.include).toEqual({ clubMember: true });
       expect(args.orderBy).toEqual([{ checkedInAt: 'asc' }, { id: 'asc' }]);
     });
 

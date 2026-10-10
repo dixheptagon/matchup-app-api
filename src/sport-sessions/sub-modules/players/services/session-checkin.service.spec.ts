@@ -108,7 +108,6 @@ describe('SessionCheckinService', () => {
           status: PlayerStatus.WAITING,
           checkedInAt: expect.any(Date),
           playCount: 0,
-          restCount: 0,
         },
         include: { clubMember: true },
       });
@@ -146,7 +145,6 @@ describe('SessionCheckinService', () => {
           status: PlayerStatus.WAITING,
           checkedInAt: expect.any(Date),
           playCount: 0,
-          restCount: 0,
         },
       });
       expect(result).toHaveLength(1);

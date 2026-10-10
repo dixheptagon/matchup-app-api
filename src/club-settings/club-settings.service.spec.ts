@@ -41,8 +41,6 @@ describe('ClubSettingsService', () => {
     opponentVariety: 'MEDIUM',
     prioritizeWaitingPlayers: 'HIGH',
     minimumRestTime: null,
-    carryBalance: 'LOW',
-    carryEvaluation: 'LOW',
     genderPreference: null,
     fairnessThreshold: null,
     createdAt: new Date(),
@@ -140,17 +138,17 @@ describe('ClubSettingsService', () => {
       mockPrisma.clubSettings.findUnique.mockResolvedValue({ id: 1 });
       mockPrisma.clubSettings.update.mockResolvedValue({
         ...mockSettings,
-        matchMakingMode: 'LOOSE_SOCIAL',
+        matchMakingMode: 'RANDOM',
       });
 
       const result = await service.upsert(mockClub, {
-        matchMakingMode: 'LOOSE_SOCIAL',
+        matchMakingMode: 'RANDOM',
       });
 
-      expect(result.matchMakingMode).toBe('LOOSE_SOCIAL');
+      expect(result.matchMakingMode).toBe('RANDOM');
       expect(mockPrisma.clubSettings.update).toHaveBeenCalledWith({
         where: { clubId: 'club-1' },
-        data: { matchMakingMode: 'LOOSE_SOCIAL' },
+        data: { matchMakingMode: 'RANDOM' },
       });
       expect(mockPrisma.clubSettings.create).not.toHaveBeenCalled();
     });

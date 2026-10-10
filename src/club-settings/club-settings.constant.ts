@@ -2,7 +2,7 @@ import {
   SportType,
   LateJoinerPolicy,
   ScoringType,
-  MatchMakingType,
+  MatchMakingMode,
   PriorityLevel,
   GenderPreferenceType,
 } from '../../prisma/generated/prisma/enums.js';
@@ -20,7 +20,7 @@ export const DEFAULT_CLUB_SETTINGS = {
 
   // MATCHMAKING
   autoMatchMaking: true,
-  matchMakingMode: MatchMakingType.BALANCED,
+  matchMakingMode: MatchMakingMode.BALANCED,
   equalPlayPriority: PriorityLevel.MEDIUM,
   balancedTeams: PriorityLevel.HIGH,
   partnerVariety: PriorityLevel.MEDIUM,
@@ -28,8 +28,6 @@ export const DEFAULT_CLUB_SETTINGS = {
   prioritizeWaitingPlayers: PriorityLevel.HIGH,
   minimumRestTime: 5,
 
-  carryBalance: PriorityLevel.LOW,
-  carryEvaluation: PriorityLevel.LOW,
   genderPreference: GenderPreferenceType.OFF,
   fairnessThreshold: 10,
 } as const;
