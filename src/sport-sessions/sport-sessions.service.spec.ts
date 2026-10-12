@@ -47,8 +47,6 @@ describe('SportSessionsService', () => {
     opponentVariety: 'MEDIUM',
     prioritizeWaitingPlayers: 'HIGH',
     minimumRestTime: 5,
-    carryBalance: 'LOW',
-    carryEvaluation: 'LOW',
     genderPreference: null,
     fairnessThreshold: 10,
     createdAt: new Date(),

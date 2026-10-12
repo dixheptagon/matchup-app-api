@@ -1,5 +1,9 @@
 import type { ClubSettings } from '../../../../prisma/generated/prisma/client.js';
-import { SessionsType } from '../../../../prisma/generated/prisma/enums.js';
+import {
+  MatchStatus,
+  PlayerStatus,
+  SessionsType,
+} from '../../../../prisma/generated/prisma/enums.js';
 import { ACTIVE_EDITABLE_SETTINGS } from '../constants/sport-sessions.constant.js';
 
 export type SessionSettingsFields = Omit<
@@ -38,4 +42,24 @@ export function getLockedActiveSettings(dto: object): string[] {
     .filter(([, value]) => value !== undefined)
     .map(([key]) => key)
     .filter((key) => !ACTIVE_EDITABLE_SETTINGS.includes(key));
+}
+
+export const ACTIVE_MATCH_STATUSES: MatchStatus[] = [
+  MatchStatus.QUEUED,
+  MatchStatus.READY,
+  MatchStatus.PLAYING,
+];
+
+/**
+ * Players who may be picked for a new match: checked in, and not already
+ * committed to a match that has not finished yet.
+ */
+export function buildEligiblePlayersWhere(sessionId: string) {
+  return {
+    sessionId,
+    status: PlayerStatus.WAITING,
+    matchPlayers: {
+      none: { match: { status: { in: ACTIVE_MATCH_STATUSES } } },
+    },
+  };
 }

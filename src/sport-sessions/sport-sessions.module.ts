@@ -19,6 +19,9 @@ import { SessionSettingsController } from './sub-modules/settings/session-settin
 import { SessionPlayerEligibilityService } from './sub-modules/players/services/session-player-eligibility.service.js';
 import { PlayerWeightingService } from './sub-modules/players/services/player-weighting.service.js';
 import { SessionPlayerEligibilityController } from './sub-modules/players/session-player-eligibility.controller.js';
+import { SessionMatchesController } from './sub-modules/matches/session-matches.controller.js';
+import { SessionMatchmakingService } from './sub-modules/matches/services/session-matchmaking.service.js';
+import { MatchCompositionService } from './sub-modules/matches/services/match-composition.service.js';
 
 @Module({
   imports: [
@@ -34,6 +37,7 @@ import { SessionPlayerEligibilityController } from './sub-modules/players/sessio
     SessionCourtsController,
     SessionSettingsController,
     SessionPlayerEligibilityController,
+    SessionMatchesController,
   ],
   providers: [
     SportSessionsService,
@@ -46,6 +50,8 @@ import { SessionPlayerEligibilityController } from './sub-modules/players/sessio
     SessionCheckinService,
     SessionPlayerEligibilityService,
     PlayerWeightingService,
+    SessionMatchmakingService,
+    MatchCompositionService,
   ],
 })
 export class SportSessionsModule {}

@@ -59,3 +59,18 @@ export const LATE_JOINER_CATCHUP_BONUS = 1.5;
 // Games a player must complete before their play count is considered
 // meaningful under LateJoinerPolicy.MIN_SESSION_PLAY.
 export const MIN_SESSION_PLAY_COUNT = 2;
+
+// ─── Match composition ───────────────────────────────────
+
+export const PLAYERS_PER_MATCH = 4;
+export const TEAM_SIZE = 2;
+
+/** Top-N fairness-ranked players that auto matchmaking may draw from. */
+export const SELECTION_WINDOW = 12;
+
+/**
+ * Gender is a soft preference: each team satisfying the configured preference
+ * adds this to the candidate score. Sized to be comparable to the skill penalty
+ * (0..-6) so it can flip close selections but never dominates.
+ */
+export const GENDER_MATCH_BONUS = 1;
