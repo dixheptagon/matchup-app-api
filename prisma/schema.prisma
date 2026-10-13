@@ -362,7 +362,7 @@ model SessionMatch {
   id             String       @id @default(uuid())
   sessionId      String
   sessionCourtId Int?
-  sequence       Int
+  sequence       Int?
   status         MatchStatus  @default(QUEUED)
   generatedBy    GenerateType @default(AUTO)
 

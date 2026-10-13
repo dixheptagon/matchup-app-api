@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SessionMatchesService } from './session-matches.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
 import { MATCH_DETAIL_INCLUDE } from '../../../shared/constants/sport-sessions.constant.js';
 import {
+  CourtStatus,
   MatchStatus,
   PlayerStatus,
 } from '../../../../../prisma/generated/prisma/enums.js';
@@ -28,10 +29,17 @@ describe('SessionMatchesService', () => {
         findMany: vi.fn(),
         count: vi.fn(),
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         delete: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
       },
       sessionPlayer: {
+        updateMany: vi.fn(),
+      },
+      sessionCourt: {
+        findFirst: vi.fn(),
+        update: vi.fn(),
         updateMany: vi.fn(),
       },
     };
@@ -50,7 +58,7 @@ describe('SessionMatchesService', () => {
   });
 
   describe('getMatchQueue', () => {
-    it('returns not-yet-playing matches ordered by sequence', async () => {
+    it('returns not-yet-playing matches ordered by creation time', async () => {
       mockPrisma.sessionMatch.findMany.mockResolvedValue([]);
       mockPrisma.sessionMatch.count.mockResolvedValue(0);
 
@@ -61,7 +69,10 @@ describe('SessionMatchesService', () => {
         sessionId: 'session-1',
         status: { in: [MatchStatus.QUEUED, MatchStatus.READY] },
       });
-      expect(args.orderBy).toEqual({ sequence: 'asc' });
+      expect(args.orderBy).toEqual([
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ]);
       expect(args.include).toEqual(MATCH_DETAIL_INCLUDE);
     });
 
@@ -242,6 +253,197 @@ describe('SessionMatchesService', () => {
       primeMatch(MatchStatus.QUEUED, [PlayerStatus.RESERVED]);
 
       await service.cancelMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    it('releases the assigned court back to AVAILABLE', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        sequence: 3,
+        status: MatchStatus.READY,
+        sessionCourtId: 7,
+        players: [
+          { sessionPlayerId: 1, sessionPlayer: { id: 1, status: PlayerStatus.RESERVED } },
+        ],
+      });
+
+      await service.cancelMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionCourt.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { status: CourtStatus.AVAILABLE },
+      });
+    });
+
+    it('performs no court write for a court-less match', async () => {
+      primeMatch(MatchStatus.QUEUED, [PlayerStatus.RESERVED]);
+
+      await service.cancelMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionCourt.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assignCourt', () => {
+    function primeCourt(status: CourtStatus) {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        sequence: 3,
+        status: MatchStatus.QUEUED,
+      });
+      mockPrisma.sessionCourt.findFirst.mockResolvedValue({
+        id: 7,
+        status,
+      });
+      // Default: both guards succeed.
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.sessionCourt.updateMany.mockResolvedValue({ count: 1 });
+    }
+
+    it('throws NotFound when the match is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.assignCourt(mockSession, 'missing', { sessionCourtId: 7 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound when the court is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        status: MatchStatus.QUEUED,
+      });
+      mockPrisma.sessionCourt.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.assignCourt(mockSession, 'match-1', { sessionCourtId: 7 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it.each([MatchStatus.READY, MatchStatus.PLAYING, MatchStatus.FINISHED])(
+      'rejects assigning a court to a %s match',
+      async (status) => {
+        mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+          id: 'match-1',
+          status,
+        });
+
+        await expect(
+          service.assignCourt(mockSession, 'match-1', { sessionCourtId: 7 }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([CourtStatus.IN_USE, CourtStatus.BLOCKED])(
+      'rejects a %s court',
+      async (status) => {
+        primeCourt(status);
+
+        await expect(
+          service.assignCourt(mockSession, 'match-1', { sessionCourtId: 7 }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('guards the match update on its status', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+
+      await service.assignCourt(mockSession, 'match-1', {
+        sessionCourtId: 7,
+      });
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'match-1',
+          status: { in: [MatchStatus.QUEUED] },
+        },
+        data: {
+          sessionCourtId: 7,
+          status: MatchStatus.READY,
+          assignedAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('guards the court update on it being AVAILABLE', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+
+      await service.assignCourt(mockSession, 'match-1', {
+        sessionCourtId: 7,
+      });
+
+      expect(mockPrisma.sessionCourt.updateMany).toHaveBeenCalledWith({
+        where: { id: 7, status: CourtStatus.AVAILABLE },
+        data: { status: CourtStatus.IN_USE },
+      });
+    });
+
+    it('throws Conflict when the match guard loses the race', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assignCourt(mockSession, 'match-1', { sessionCourtId: 7 }),
+      ).rejects.toThrow(ConflictException);
+
+      // The court must never be taken when the match guard failed.
+      expect(mockPrisma.sessionCourt.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws Conflict when the court guard loses the race', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.sessionCourt.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assignCourt(mockSession, 'match-1', { sessionCourtId: 7 }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('returns the updated match with its court', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      const updated = { id: 'match-1', status: MatchStatus.READY };
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue(updated);
+
+      const result = await service.assignCourt(mockSession, 'match-1', {
+        sessionCourtId: 7,
+      });
+
+      expect(result).toEqual(updated);
+      expect(mockPrisma.sessionMatch.findUnique).toHaveBeenCalledWith({
+        where: { id: 'match-1' },
+        include: MATCH_DETAIL_INCLUDE,
+      });
+    });
+
+    it('locks the match before the court', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+
+      await service.assignCourt(mockSession, 'match-1', {
+        sessionCourtId: 7,
+      });
+
+      const order = [
+        mockPrisma.sessionMatch.updateMany.mock.invocationCallOrder[0],
+        mockPrisma.sessionCourt.updateMany.mock.invocationCallOrder[0],
+      ];
+      expect(order[0]).toBeLessThan(order[1]);
+    });
+
+    it('runs every write inside a single transaction', async () => {
+      primeCourt(CourtStatus.AVAILABLE);
+
+      await service.assignCourt(mockSession, 'match-1', {
+        sessionCourtId: 7,
+      });
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
       expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));

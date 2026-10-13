@@ -169,17 +169,12 @@ export class SessionMatchmakingService {
   ) {
     const playerIds = teams.flat();
 
-    const latest = await tx.sessionMatch.findFirst({
-      where: { sessionId: session.id },
-      orderBy: { sequence: 'desc' },
-      select: { sequence: true },
-    });
-
+    // The play-order sequence stays null until the match actually starts.
     const match = await tx.sessionMatch.create({
       data: {
         sessionId: session.id,
         sessionCourtId: null,
-        sequence: (latest?.sequence ?? 0) + 1,
+        sequence: null,
         status: MatchStatus.QUEUED,
         generatedBy,
       },

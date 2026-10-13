@@ -31,6 +31,9 @@ export const DELETABLE_MATCH_STATUSES: MatchStatus[] = [
 /** Live matches that are soft-cancelled instead of deleted. */
 export const SOFT_CANCEL_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
 
+/** Matches that can still be given a court, i.e. not yet assigned. */
+export const ASSIGNABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.QUEUED];
+
 /** Player states returned to WAITING when their match is cancelled. */
 export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.RESERVED,

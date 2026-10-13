@@ -117,7 +117,6 @@ describe('SessionMatchmakingService', () => {
   function primeAutoPath() {
     mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
     mockPrisma.sessionPlayer.findMany.mockResolvedValue(eligibleRows);
-    mockPrisma.sessionMatch.findFirst.mockResolvedValue({ sequence: 7 });
     mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-1' });
     mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
   }
@@ -145,7 +144,7 @@ describe('SessionMatchmakingService', () => {
       expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
     });
 
-    it('creates a court-less QUEUED match with an incrementing sequence', async () => {
+    it('creates a court-less QUEUED match with no sequence', async () => {
       primeAutoPath();
 
       await service.autoMatch(mockSession);
@@ -154,11 +153,19 @@ describe('SessionMatchmakingService', () => {
         data: {
           sessionId: 'session-1',
           sessionCourtId: null,
-          sequence: 8,
+          sequence: null,
           status: MatchStatus.QUEUED,
           generatedBy: GenerateType.AUTO,
         },
       });
+    });
+
+    it('does not look up the latest sequence when creating a match', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(mockPrisma.sessionMatch.findFirst).not.toHaveBeenCalled();
     });
 
     it('delegates selection to the composition service', async () => {
@@ -223,7 +230,6 @@ describe('SessionMatchmakingService', () => {
         { id: 4, status: PlayerStatus.WAITING },
       ]);
       mockPrisma.matchPlayer.findMany.mockResolvedValue([]);
-      mockPrisma.sessionMatch.findFirst.mockResolvedValue({ sequence: 0 });
       mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-2' });
       mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-2' });
     });

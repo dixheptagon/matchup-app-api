@@ -1,4 +1,4 @@
-import type { ClubSettings } from '../../../../prisma/generated/prisma/client.js';
+import type { ClubSettings, Prisma } from '../../../../prisma/generated/prisma/client.js';
 import {
   MatchStatus,
   PlayerStatus,
@@ -62,4 +62,22 @@ export function buildEligiblePlayersWhere(sessionId: string) {
       none: { match: { status: { in: ACTIVE_MATCH_STATUSES } } },
     },
   };
+}
+
+/**
+ * Next play-order number for a session. Matches that have not started yet carry
+ * a null sequence, so the `sequence: { not: null }` filter is required —
+ * without it the descending sort could pick a null row and reset the counter.
+ */
+export async function allocateMatchSequence(
+  tx: Prisma.TransactionClient,
+  sessionId: string,
+): Promise<number> {
+  const latest = await tx.sessionMatch.findFirst({
+    where: { sessionId, sequence: { not: null } },
+    orderBy: { sequence: 'desc' },
+    select: { sequence: true },
+  });
+
+  return (latest?.sequence ?? 0) + 1;
 }

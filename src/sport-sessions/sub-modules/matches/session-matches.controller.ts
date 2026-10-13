@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -20,6 +21,7 @@ import { SessionMatchesService } from './services/session-matches.service.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchQueueQueryDto } from './dto/match-queue-query.dto.js';
 import { CancelMatchDto } from './dto/cancel-match.dto.js';
+import { AssignCourtDto } from './dto/assign-court.dto.js';
 
 @Controller('sport-clubs/:clubSlug/sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,7 +44,7 @@ export class SessionMatchesController {
     return this.sessionMatchesService.getMatchQueue(session, query);
   }
 
-  @Post(':sessionId/matches/:matchId/cancel')
+  @Delete(':sessionId/matches/:matchId/cancel')
   @UseGuards(SessionGuard)
   @SessionStatuses(SessionStatus.ACTIVE)
   async cancelMatch(
@@ -51,6 +53,19 @@ export class SessionMatchesController {
     @Body() dto: CancelMatchDto,
   ) {
     return this.sessionMatchesService.cancelMatch(session, matchId, dto);
+  }
+
+  // Court Assignment
+
+  @Post(':sessionId/matches/:matchId/court')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async assignCourt(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+    @Body() dto: AssignCourtDto,
+  ) {
+    return this.sessionMatchesService.assignCourt(session, matchId, dto);
   }
 
   // Matchmaking
