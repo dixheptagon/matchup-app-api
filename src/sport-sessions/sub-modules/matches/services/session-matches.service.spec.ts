@@ -1,8 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SessionMatchesService } from './session-matches.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
 import { MATCH_DETAIL_INCLUDE } from '../../../shared/constants/sport-sessions.constant.js';
-import { MatchStatus } from '../../../../../prisma/generated/prisma/enums.js';
+import {
+  MatchStatus,
+  PlayerStatus,
+} from '../../../../../prisma/generated/prisma/enums.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
 describe('SessionMatchesService', () => {
@@ -23,6 +27,12 @@ describe('SessionMatchesService', () => {
       sessionMatch: {
         findMany: vi.fn(),
         count: vi.fn(),
+        findFirst: vi.fn(),
+        delete: vi.fn(),
+        update: vi.fn(),
+      },
+      sessionPlayer: {
+        updateMany: vi.fn(),
       },
     };
     mockPrisma.$transaction = vi.fn(async (arg: unknown) =>
@@ -100,6 +110,141 @@ describe('SessionMatchesService', () => {
 
       expect(result.data).toHaveLength(0);
       expect(result.meta.total).toBe(7);
+    });
+  });
+
+  describe('cancelMatch', () => {
+    function primeMatch(status: MatchStatus, playerStatuses: PlayerStatus[]) {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        sequence: 3,
+        status,
+        players: playerStatuses.map((playerStatus, index) => ({
+          sessionPlayerId: index + 1,
+          sessionPlayer: { id: index + 1, status: playerStatus },
+        })),
+      });
+    }
+
+    it('throws NotFound when the match is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.cancelMatch(mockSession, 'missing'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.sessionMatch.delete).not.toHaveBeenCalled();
+    });
+
+    it.each([MatchStatus.FINISHED, MatchStatus.CANCELLED])(
+      'rejects a %s match',
+      async (status) => {
+        primeMatch(status, [PlayerStatus.RESERVED]);
+
+        await expect(
+          service.cancelMatch(mockSession, 'match-1'),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrisma.sessionMatch.delete).not.toHaveBeenCalled();
+        expect(mockPrisma.sessionMatch.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([MatchStatus.QUEUED, MatchStatus.READY])(
+      'hard deletes a %s match and discards the reason',
+      async (status) => {
+        primeMatch(status, [PlayerStatus.RESERVED]);
+
+        const result = await service.cancelMatch(mockSession, 'match-1', {
+          reason: 'not needed',
+        });
+
+        expect(mockPrisma.sessionMatch.delete).toHaveBeenCalledWith({
+          where: { id: 'match-1' },
+        });
+        expect(mockPrisma.sessionMatch.update).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          action: 'DELETED',
+          matchId: 'match-1',
+          sequence: 3,
+          releasedPlayerIds: [1],
+          cancelReason: null,
+        });
+      },
+    );
+
+    it('soft cancels a PLAYING match and stores the reason', async () => {
+      primeMatch(MatchStatus.PLAYING, [PlayerStatus.PLAYING]);
+
+      const result = await service.cancelMatch(mockSession, 'match-1', {
+        reason: 'court flooded',
+      });
+
+      expect(mockPrisma.sessionMatch.delete).not.toHaveBeenCalled();
+      expect(mockPrisma.sessionMatch.update).toHaveBeenCalledWith({
+        where: { id: 'match-1' },
+        data: {
+          status: MatchStatus.CANCELLED,
+          cancelReason: 'court flooded',
+          cancelledAt: expect.any(Date),
+        },
+      });
+      expect(result).toEqual({
+        action: 'CANCELLED',
+        matchId: 'match-1',
+        sequence: 3,
+        releasedPlayerIds: [1],
+        cancelReason: 'court flooded',
+      });
+    });
+
+    it('stores a null reason when none is supplied', async () => {
+      primeMatch(MatchStatus.PLAYING, [PlayerStatus.PLAYING]);
+
+      await service.cancelMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionMatch.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ cancelReason: null }),
+        }),
+      );
+    });
+
+    it('returns both RESERVED and PLAYING players to the waiting pool', async () => {
+      primeMatch(MatchStatus.PLAYING, [
+        PlayerStatus.PLAYING,
+        PlayerStatus.RESERVED,
+      ]);
+
+      const result = await service.cancelMatch(mockSession, 'match-1');
+
+      expect(result.releasedPlayerIds).toEqual([1, 2]);
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [1, 2] },
+          status: { in: [PlayerStatus.RESERVED, PlayerStatus.PLAYING] },
+        },
+        data: { status: PlayerStatus.WAITING },
+      });
+    });
+
+    it('leaves players in other states untouched', async () => {
+      primeMatch(MatchStatus.PLAYING, [
+        PlayerStatus.RESTING,
+        PlayerStatus.LEFT,
+      ]);
+
+      const result = await service.cancelMatch(mockSession, 'match-1');
+
+      expect(result.releasedPlayerIds).toEqual([]);
+      expect(mockPrisma.sessionPlayer.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('runs every write inside a single transaction', async () => {
+      primeMatch(MatchStatus.QUEUED, [PlayerStatus.RESERVED]);
+
+      await service.cancelMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 });

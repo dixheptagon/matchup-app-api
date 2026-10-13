@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../../sport-members/guards/roles.guard.js';
 import { Roles } from '../../../sport-members/decorators/roles.decorator.js';
@@ -11,6 +19,7 @@ import { SessionMatchmakingService } from './services/session-matchmaking.servic
 import { SessionMatchesService } from './services/session-matches.service.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchQueueQueryDto } from './dto/match-queue-query.dto.js';
+import { CancelMatchDto } from './dto/cancel-match.dto.js';
 
 @Controller('sport-clubs/:clubSlug/sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,6 +40,17 @@ export class SessionMatchesController {
     @Query() query: MatchQueueQueryDto,
   ) {
     return this.sessionMatchesService.getMatchQueue(session, query);
+  }
+
+  @Post(':sessionId/matches/:matchId/cancel')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async cancelMatch(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+    @Body() dto: CancelMatchDto,
+  ) {
+    return this.sessionMatchesService.cancelMatch(session, matchId, dto);
   }
 
   // Matchmaking

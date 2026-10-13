@@ -370,6 +370,9 @@ model SessionMatch {
   startedAt  DateTime?
   endedAt    DateTime?
 
+  cancelReason String?
+  cancelledAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

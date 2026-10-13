@@ -3,6 +3,7 @@
 import { Prisma } from '../../../../prisma/generated/prisma/client.js';
 import {
   MatchStatus,
+  PlayerStatus,
   PriorityLevel,
 } from '../../../../prisma/generated/prisma/enums.js';
 
@@ -19,6 +20,21 @@ export const MATCH_DETAIL_INCLUDE = {
 export const QUEUE_MATCH_STATUSES: MatchStatus[] = [
   MatchStatus.QUEUED,
   MatchStatus.READY,
+];
+
+/** Matches that never started, so cancelling them is a hard delete. */
+export const DELETABLE_MATCH_STATUSES: MatchStatus[] = [
+  MatchStatus.QUEUED,
+  MatchStatus.READY,
+];
+
+/** Live matches that are soft-cancelled instead of deleted. */
+export const SOFT_CANCEL_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
+
+/** Player states returned to WAITING when their match is cancelled. */
+export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.RESERVED,
+  PlayerStatus.PLAYING,
 ];
 
 export const SESSION_DETAIL_INCLUDE = {
