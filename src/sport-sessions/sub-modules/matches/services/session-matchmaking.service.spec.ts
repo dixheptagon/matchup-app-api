@@ -1,8 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SessionMatchmakingService } from './session-matchmaking.service.js';
 import { MatchCompositionService } from './match-composition.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { Prisma } from '../../../../../prisma/generated/prisma/client.js';
 import { PlayerWeightingService } from '../../players/services/player-weighting.service.js';
 import {
   GenerateType,
@@ -117,6 +122,7 @@ describe('SessionMatchmakingService', () => {
   function primeAutoPath() {
     mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
     mockPrisma.sessionPlayer.findMany.mockResolvedValue(eligibleRows);
+    mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 4 });
     mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-1' });
     mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
   }
@@ -197,15 +203,61 @@ describe('SessionMatchmakingService', () => {
       });
     });
 
-    it('reserves the matched players', async () => {
+    it('reserves the matched players with a guarded compare-and-set', async () => {
       primeAutoPath();
 
       await service.autoMatch(mockSession);
 
       expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [1, 2, 3, 4] } },
+        where: {
+          id: { in: [1, 2, 3, 4] },
+          status: PlayerStatus.WAITING,
+        },
         data: { status: PlayerStatus.RESERVED },
       });
+    });
+
+    it('reserves players before creating the match', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(
+        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockPrisma.sessionMatch.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('throws Conflict and inserts nothing when a player is already taken', async () => {
+      primeAutoPath();
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 3 });
+
+      await expect(service.autoMatch(mockSession)).rejects.toThrow(
+        ConflictException,
+      );
+
+      expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
+      expect(mockPrisma.matchPlayer.createMany).not.toHaveBeenCalled();
+    });
+
+    it('maps a write conflict to a 409', async () => {
+      mockPrisma.$transaction.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('conflict', {
+          code: 'P2034',
+          clientVersion: '7.0.0',
+        }),
+      );
+
+      await expect(service.autoMatch(mockSession)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('propagates unrelated errors unchanged', async () => {
+      mockPrisma.$transaction.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(service.autoMatch(mockSession)).rejects.toThrow('boom');
     });
 
     it('runs every write inside a single serializable transaction', async () => {
@@ -230,6 +282,7 @@ describe('SessionMatchmakingService', () => {
         { id: 4, status: PlayerStatus.WAITING },
       ]);
       mockPrisma.matchPlayer.findMany.mockResolvedValue([]);
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 4 });
       mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-2' });
       mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-2' });
     });

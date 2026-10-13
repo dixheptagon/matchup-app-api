@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
@@ -35,8 +36,7 @@ export class SessionMatchmakingService {
   ) {}
 
   async autoMatch(session: SessionContext) {
-    return this.prisma.$transaction(
-      async (tx) => {
+    return this.runMatchmakingTx(async (tx) => {
         const settings = await tx.sessionSettings.findUnique({
           where: { sessionId: session.id },
         });
@@ -78,25 +78,20 @@ export class SessionMatchmakingService {
           [lineup.teamA, lineup.teamB],
           GenerateType.AUTO,
         );
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+      });
   }
 
   async createManualMatch(session: SessionContext, dto: CreateMatchDto) {
-    return this.prisma.$transaction(
-      async (tx) => {
-        await this.assertPlayersAvailable(tx, session.id, dto);
+    return this.runMatchmakingTx(async (tx) => {
+      await this.assertPlayersAvailable(tx, session.id, dto);
 
-        return this.persistMatch(
-          tx,
-          session,
-          [dto.teamA, dto.teamB],
-          GenerateType.MANUAL,
-        );
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    );
+      return this.persistMatch(
+        tx,
+        session,
+        [dto.teamA, dto.teamB],
+        GenerateType.MANUAL,
+      );
+    });
   }
 
   private async assertPlayersAvailable(
@@ -169,6 +164,10 @@ export class SessionMatchmakingService {
   ) {
     const playerIds = teams.flat();
 
+    // Reserve first: it is the point of no return, takes the player locks
+    // earliest, and fails before any rows are inserted.
+    await this.reservePlayers(tx, playerIds);
+
     // The play-order sequence stays null until the match actually starts.
     const match = await tx.sessionMatch.create({
       data: {
@@ -191,14 +190,45 @@ export class SessionMatchmakingService {
       ),
     });
 
-    await tx.sessionPlayer.updateMany({
-      where: { id: { in: playerIds } },
-      data: { status: PlayerStatus.RESERVED },
-    });
-
     return tx.sessionMatch.findUnique({
       where: { id: match.id },
       include: MATCH_DETAIL_INCLUDE,
     });
+  }
+
+  /**
+   * Compare-and-set on the player status. Any player already claimed by another
+   * request yields a short count, which aborts the whole transaction.
+   */
+  private async reservePlayers(tx: Tx, playerIds: number[]) {
+    const reservation = await tx.sessionPlayer.updateMany({
+      where: { id: { in: playerIds }, status: PlayerStatus.WAITING },
+      data: { status: PlayerStatus.RESERVED },
+    });
+
+    if (reservation.count !== playerIds.length) {
+      throw new ConflictException(
+        'One or more players were already matched by another request',
+      );
+    }
+  }
+
+  /**
+   * Serializable isolation, with write conflicts surfaced as 409 instead of an
+   * unhandled Prisma error.
+   */
+  private async runMatchmakingTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    try {
+      return await this.prisma.$transaction(fn, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        throw new ConflictException(
+          'Matchmaking conflicted with a concurrent request; please retry',
+        );
+      }
+      throw error;
+    }
   }
 }
