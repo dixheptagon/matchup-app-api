@@ -1,9 +1,26 @@
 // TODO : Refactor include while developing FE
 
 import { Prisma } from '../../../../prisma/generated/prisma/client.js';
-import { PriorityLevel } from '../../../../prisma/generated/prisma/enums.js';
+import {
+  MatchStatus,
+  PriorityLevel,
+} from '../../../../prisma/generated/prisma/enums.js';
 
 // Return only the fields that are needed for FE
+export const MATCH_DETAIL_INCLUDE = {
+  court: { include: { court: true } },
+  players: {
+    include: { sessionPlayer: { include: { clubMember: true } } },
+    orderBy: [{ team: 'asc' }, { position: 'asc' }],
+  },
+} satisfies Prisma.SessionMatchInclude;
+
+/** Matches that are committed but not yet playing — i.e. the match queue. */
+export const QUEUE_MATCH_STATUSES: MatchStatus[] = [
+  MatchStatus.QUEUED,
+  MatchStatus.READY,
+];
+
 export const SESSION_DETAIL_INCLUDE = {
   sessionSettings: true,
   sessionCourts: { include: { court: true } },

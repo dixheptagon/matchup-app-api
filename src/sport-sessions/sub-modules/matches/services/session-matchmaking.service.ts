@@ -15,7 +15,10 @@ import {
   ACTIVE_MATCH_STATUSES,
   buildEligiblePlayersWhere,
 } from '../../../shared/helpers/sport-sessions.helper.js';
-import { PLAYERS_PER_MATCH } from '../../../shared/constants/sport-sessions.constant.js';
+import {
+  MATCH_DETAIL_INCLUDE,
+  PLAYERS_PER_MATCH,
+} from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import { PlayerWeightingService } from '../../players/services/player-weighting.service.js';
 import { MatchCompositionService } from './match-composition.service.js';
@@ -200,14 +203,7 @@ export class SessionMatchmakingService {
 
     return tx.sessionMatch.findUnique({
       where: { id: match.id },
-      include: {
-        players: {
-          include: {
-            sessionPlayer: { include: { clubMember: true } },
-          },
-          orderBy: [{ team: 'asc' }, { position: 'asc' }],
-        },
-      },
+      include: MATCH_DETAIL_INCLUDE,
     });
   }
 }

@@ -21,6 +21,7 @@ import { PlayerWeightingService } from './sub-modules/players/services/player-we
 import { SessionPlayerEligibilityController } from './sub-modules/players/session-player-eligibility.controller.js';
 import { SessionMatchesController } from './sub-modules/matches/session-matches.controller.js';
 import { SessionMatchmakingService } from './sub-modules/matches/services/session-matchmaking.service.js';
+import { SessionMatchesService } from './sub-modules/matches/services/session-matches.service.js';
 import { MatchCompositionService } from './sub-modules/matches/services/match-composition.service.js';
 
 @Module({
@@ -51,6 +52,7 @@ import { MatchCompositionService } from './sub-modules/matches/services/match-co
     SessionPlayerEligibilityService,
     PlayerWeightingService,
     SessionMatchmakingService,
+    SessionMatchesService,
     MatchCompositionService,
   ],
 })
