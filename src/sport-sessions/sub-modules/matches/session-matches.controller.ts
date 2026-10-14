@@ -68,6 +68,18 @@ export class SessionMatchesController {
     return this.sessionMatchesService.assignCourt(session, matchId, dto);
   }
 
+  // Match Start
+
+@Post(':sessionId/matches/:matchId/start')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async startMatch(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+  ) {
+    return this.sessionMatchesService.startMatch(session, matchId);
+  }
+
   // Matchmaking
 
   @Post(':sessionId/matches/auto')

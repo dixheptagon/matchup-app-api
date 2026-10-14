@@ -34,6 +34,9 @@ export const SOFT_CANCEL_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
 /** Matches that can still be given a court, i.e. not yet assigned. */
 export const ASSIGNABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.QUEUED];
 
+/** Matches that can be put into play, i.e. court already assigned. */
+export const STARTABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.READY];
+
 /** Player states returned to WAITING when their match is cancelled. */
 export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.RESERVED,

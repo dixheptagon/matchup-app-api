@@ -18,7 +18,9 @@ import {
   QUEUE_MATCH_STATUSES,
   RELEASABLE_PLAYER_STATUSES,
   SOFT_CANCEL_MATCH_STATUSES,
+  STARTABLE_MATCH_STATUSES,
 } from '../../../shared/constants/sport-sessions.constant.js';
+import { allocateMatchSequence } from '../../../shared/helpers/sport-sessions.helper.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import { MatchQueueQueryDto } from '../dto/match-queue-query.dto.js';
 import { CancelMatchDto } from '../dto/cancel-match.dto.js';
@@ -199,6 +201,82 @@ export class SessionMatchesService {
         include: MATCH_DETAIL_INCLUDE,
       });
     });
+  }
+
+  /**
+   * Puts a court-assigned (READY) match into play: allocates its play-order
+   * sequence, stamps startedAt, and moves its reserved players to PLAYING.
+   *
+   * The court was already taken IN_USE at assignment, so it is left alone here.
+   */
+  async startMatch(session: SessionContext, matchId: string) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const match = await tx.sessionMatch.findFirst({
+          where: { id: matchId, sessionId: session.id },
+          include: { players: { select: { sessionPlayerId: true } } },
+        });
+
+        if (!match) {
+          throw new NotFoundException('Match not found');
+        }
+
+        if (!STARTABLE_MATCH_STATUSES.includes(match.status)) {
+          throw new BadRequestException(
+            `Cannot start a ${match.status} match`,
+          );
+        }
+
+        const sequence = await allocateMatchSequence(tx, session.id);
+
+        // Lock order is match -> players, matching cancelMatch.
+        const matchUpdate = await tx.sessionMatch.updateMany({
+          where: {
+            id: match.id,
+            status: { in: STARTABLE_MATCH_STATUSES },
+          },
+          data: {
+            status: MatchStatus.PLAYING,
+            startedAt: new Date(),
+            sequence,
+          },
+        });
+
+        if (matchUpdate.count === 0) {
+          throw new ConflictException('Match was started by another request');
+        }
+
+        const playerIds = match.players.map((player) => player.sessionPlayerId);
+
+        const playerUpdate = await tx.sessionPlayer.updateMany({
+          where: { id: { in: playerIds }, status: PlayerStatus.RESERVED },
+          data: { status: PlayerStatus.PLAYING },
+        });
+
+        if (playerUpdate.count !== playerIds.length) {
+          throw new ConflictException(
+            'One or more players are no longer reserved',
+          );
+        }
+
+        return tx.sessionMatch.findUnique({
+          where: { id: match.id },
+          include: MATCH_DETAIL_INCLUDE,
+        });
+      });
+    } catch (error) {
+      // Two matches starting together can compute the same next sequence; the
+      // unique index rejects the loser.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Match sequence conflicted with a concurrent start',
+        );
+      }
+      throw error;
+    }
   }
 
   private async releaseCourt(tx: Tx, sessionCourtId: number | null | undefined) {

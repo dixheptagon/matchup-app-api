@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SessionMatchesService } from './session-matches.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { Prisma } from '../../../../../prisma/generated/prisma/client.js';
 import { MATCH_DETAIL_INCLUDE } from '../../../shared/constants/sport-sessions.constant.js';
 import {
   CourtStatus,
@@ -447,6 +448,141 @@ describe('SessionMatchesService', () => {
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
       expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    });
+  });
+
+  describe('startMatch', () => {
+    function primeStart(status: MatchStatus) {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        sequence: null,
+        status,
+        players: [{ sessionPlayerId: 1 }, { sessionPlayerId: 2 }],
+      });
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 2 });
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+    }
+
+    it('throws NotFound when the match is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
+
+      await expect(service.startMatch(mockSession, 'missing')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      MatchStatus.QUEUED,
+      MatchStatus.PLAYING,
+      MatchStatus.FINISHED,
+      MatchStatus.CANCELLED,
+    ])('rejects starting a %s match', async (status) => {
+      primeStart(status);
+
+      await expect(service.startMatch(mockSession, 'match-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('puts the match into play and allocates a sequence', async () => {
+      primeStart(MatchStatus.READY);
+
+      await service.startMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'match-1',
+          status: { in: [MatchStatus.READY] },
+        },
+        data: {
+          status: MatchStatus.PLAYING,
+          startedAt: expect.any(Date),
+          sequence: 1,
+        },
+      });
+    });
+
+    it('moves reserved players to PLAYING', async () => {
+      primeStart(MatchStatus.READY);
+
+      await service.startMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: [1, 2] }, status: PlayerStatus.RESERVED },
+        data: { status: PlayerStatus.PLAYING },
+      });
+    });
+
+    it('throws Conflict when the match guard loses the race', async () => {
+      primeStart(MatchStatus.READY);
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.startMatch(mockSession, 'match-1')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockPrisma.sessionPlayer.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws Conflict when a player is no longer reserved', async () => {
+      primeStart(MatchStatus.READY);
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(service.startMatch(mockSession, 'match-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('maps a sequence unique violation to a 409', async () => {
+      mockPrisma.$transaction.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('duplicate', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+        }),
+      );
+
+      await expect(service.startMatch(mockSession, 'match-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('propagates unrelated errors unchanged', async () => {
+      mockPrisma.$transaction.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(service.startMatch(mockSession, 'match-1')).rejects.toThrow(
+        'boom',
+      );
+    });
+
+    it('locks the match before the players', async () => {
+      primeStart(MatchStatus.READY);
+
+      await service.startMatch(mockSession, 'match-1');
+
+      expect(
+        mockPrisma.sessionMatch.updateMany.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('runs every write inside a single transaction', async () => {
+      primeStart(MatchStatus.READY);
+
+      await service.startMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch the court', async () => {
+      primeStart(MatchStatus.READY);
+
+      await service.startMatch(mockSession, 'match-1');
+
+      expect(mockPrisma.sessionCourt.update).not.toHaveBeenCalled();
+      expect(mockPrisma.sessionCourt.updateMany).not.toHaveBeenCalled();
     });
   });
 });
