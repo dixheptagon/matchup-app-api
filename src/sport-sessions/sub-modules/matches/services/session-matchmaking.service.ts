@@ -18,6 +18,7 @@ import {
 } from '../../../shared/helpers/sport-sessions.helper.js';
 import {
   MATCH_DETAIL_INCLUDE,
+  MATCHMAKING_LOCK_NAMESPACE,
   PLAYERS_PER_MATCH,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
@@ -36,7 +37,7 @@ export class SessionMatchmakingService {
   ) {}
 
   async autoMatch(session: SessionContext) {
-    return this.runMatchmakingTx(async (tx) => {
+    return this.runMatchmakingTx(session.id, async (tx) => {
         const settings = await tx.sessionSettings.findUnique({
           where: { sessionId: session.id },
         });
@@ -82,7 +83,7 @@ export class SessionMatchmakingService {
   }
 
   async createManualMatch(session: SessionContext, dto: CreateMatchDto) {
-    return this.runMatchmakingTx(async (tx) => {
+    return this.runMatchmakingTx(session.id, async (tx) => {
       await this.assertPlayersAvailable(tx, session.id, dto);
 
       return this.persistMatch(
@@ -214,21 +215,24 @@ export class SessionMatchmakingService {
   }
 
   /**
-   * Serializable isolation, with write conflicts surfaced as 409 instead of an
-   * unhandled Prisma error.
+   * Runs matchmaking inside a transaction that holds a session-scoped advisory
+   * lock. Concurrent matchmaking requests for the same session queue on this lock
+   * instead of conflicting under Serializable isolation, so a caller can trigger
+   * several matches at once and have each one pick a disjoint set of players.
+   * The lock is released automatically when the transaction commits or rolls back.
    */
-  private async runMatchmakingTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-    try {
-      return await this.prisma.$transaction(fn, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        throw new ConflictException(
-          'Matchmaking conflicted with a concurrent request; please retry',
-        );
-      }
-      throw error;
-    }
+  private async runMatchmakingTx<T>(
+    sessionId: string,
+    fn: (tx: Tx) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(
+          ${MATCHMAKING_LOCK_NAMESPACE}::int,
+          hashtext(${sessionId})
+        )
+      `;
+      return fn(tx);
+    });
   }
 }

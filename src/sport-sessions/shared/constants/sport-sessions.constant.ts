@@ -7,6 +7,14 @@ import {
   PriorityLevel,
 } from '../../../../prisma/generated/prisma/enums.js';
 
+/**
+ * Advisory-lock namespace for matchmaking. Matchmaking takes a transaction-scoped
+ * lock keyed by session id, so concurrent requests for one session queue instead
+ * of conflicting under Serializable isolation. The namespace keeps these locks
+ * separate from any other advisory lock taken elsewhere in the app.
+ */
+export const MATCHMAKING_LOCK_NAMESPACE = 1;
+
 // Return only the fields that are needed for FE
 export const MATCH_DETAIL_INCLUDE = {
   court: { include: { court: true } },

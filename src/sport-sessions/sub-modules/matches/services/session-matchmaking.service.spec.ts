@@ -7,8 +7,8 @@ import {
 import { SessionMatchmakingService } from './session-matchmaking.service.js';
 import { MatchCompositionService } from './match-composition.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
-import { Prisma } from '../../../../../prisma/generated/prisma/client.js';
 import { PlayerWeightingService } from '../../players/services/player-weighting.service.js';
+import { MATCHMAKING_LOCK_NAMESPACE } from '../../../shared/constants/sport-sessions.constant.js';
 import {
   GenerateType,
   MatchMakingMode,
@@ -92,6 +92,7 @@ describe('SessionMatchmakingService', () => {
         createMany: vi.fn(),
       },
     };
+    mockPrisma.$queryRaw = vi.fn().mockResolvedValue([]);
     mockPrisma.$transaction = vi.fn(
       async (arg: unknown) =>
         typeof arg === 'function'
@@ -241,16 +242,25 @@ describe('SessionMatchmakingService', () => {
       expect(mockPrisma.matchPlayer.createMany).not.toHaveBeenCalled();
     });
 
-    it('maps a write conflict to a 409', async () => {
-      mockPrisma.$transaction.mockRejectedValueOnce(
-        new Prisma.PrismaClientKnownRequestError('conflict', {
-          code: 'P2034',
-          clientVersion: '7.0.0',
-        }),
-      );
+    it('takes a session-scoped advisory lock', async () => {
+      primeAutoPath();
 
-      await expect(service.autoMatch(mockSession)).rejects.toThrow(
-        ConflictException,
+      await service.autoMatch(mockSession);
+
+      const [statement, ...values] = mockPrisma.$queryRaw.mock.calls[0];
+      expect(String(statement)).toContain('pg_advisory_xact_lock');
+      expect(values).toEqual([MATCHMAKING_LOCK_NAMESPACE, mockSession.id]);
+    });
+
+    it('acquires the lock before reading the player pool', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(
+        mockPrisma.$queryRaw.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        mockPrisma.sessionPlayer.findMany.mock.invocationCallOrder[0],
       );
     });
 
@@ -260,16 +270,52 @@ describe('SessionMatchmakingService', () => {
       await expect(service.autoMatch(mockSession)).rejects.toThrow('boom');
     });
 
-    it('runs every write inside a single serializable transaction', async () => {
+    it('runs every write inside a single transaction', async () => {
       primeAutoPath();
 
       await service.autoMatch(mockSession);
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.$transaction).toHaveBeenCalledWith(
-        expect.any(Function),
-        { isolationLevel: 'Serializable' },
-      );
+      expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    it('leaves isolation at the default instead of Serializable', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(mockPrisma.$transaction.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('serialises a second concurrent auto-match onto the same lock', async () => {
+      primeAutoPath();
+      composition.compose
+        .mockReturnValueOnce({ teamA: [1, 2], teamB: [3, 4], selected: [1, 2, 3, 4] })
+        .mockReturnValueOnce({ teamA: [5, 6], teamB: [7, 8], selected: [5, 6, 7, 8] });
+
+      const first = service.autoMatch(mockSession);
+      // The pool now excludes the players reserved by the first match.
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        { ...eligibleRows[0], id: 5 },
+        { ...eligibleRows[1], id: 6 },
+        { ...eligibleRows[2], id: 7 },
+        { ...eligibleRows[3], id: 8 },
+      ]);
+      const second = service.autoMatch(mockSession);
+
+      await Promise.all([first, second]);
+
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(
+        mockPrisma.sessionPlayer.updateMany.mock.calls.map(
+          (call: unknown[]) =>
+            (call[0] as { where: { id: { in: number[] } } }).where.id.in,
+        ),
+      ).toEqual([
+        [1, 2, 3, 4],
+        [5, 6, 7, 8],
+      ]);
+      expect(mockPrisma.sessionMatch.create).toHaveBeenCalledTimes(2);
     });
   });
 
