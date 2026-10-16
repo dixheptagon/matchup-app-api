@@ -366,6 +366,9 @@ model SessionMatch {
   status         MatchStatus  @default(QUEUED)
   generatedBy    GenerateType @default(AUTO)
 
+  scoreTeamA Int @default(0)
+  scoreTeamB Int @default(0)
+
   assignedAt DateTime?
   startedAt  DateTime?
   endedAt    DateTime?

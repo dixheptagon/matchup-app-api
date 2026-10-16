@@ -8,6 +8,7 @@ import {
   CourtStatus,
   MatchStatus,
   PlayerStatus,
+  TeamGroup,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
@@ -34,6 +35,9 @@ describe('SessionMatchesService', () => {
         delete: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn(),
+      },
+      sessionSettings: {
+        findUnique: vi.fn(),
       },
       sessionPlayer: {
         updateMany: vi.fn(),
@@ -583,6 +587,190 @@ describe('SessionMatchesService', () => {
 
       expect(mockPrisma.sessionCourt.update).not.toHaveBeenCalled();
       expect(mockPrisma.sessionCourt.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('adjustMatchScore', () => {
+    function primeScore(
+      status: MatchStatus,
+      scores: { scoreTeamA: number; scoreTeamB: number },
+      tracking = true,
+    ) {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        status,
+        ...scores,
+      });
+      mockPrisma.sessionSettings.findUnique.mockResolvedValue({
+        trackMatchScore: tracking,
+      });
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({
+        id: 'match-1',
+        status,
+        ...scores,
+      });
+    }
+
+    const playing = { scoreTeamA: 5, scoreTeamB: 3 };
+
+    it('throws NotFound when the match is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.adjustMatchScore(mockSession, 'missing', {
+          team: TeamGroup.TEAM_A,
+          delta: 1,
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      MatchStatus.QUEUED,
+      MatchStatus.READY,
+      MatchStatus.FINISHED,
+      MatchStatus.CANCELLED,
+    ])('rejects scoring a %s match', async (status) => {
+      primeScore(status, playing);
+
+      await expect(
+        service.adjustMatchScore(mockSession, 'match-1', {
+          team: TeamGroup.TEAM_A,
+          delta: 1,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects scoring when the session does not track score', async () => {
+      primeScore(MatchStatus.PLAYING, playing, false);
+
+      await expect(
+        service.adjustMatchScore(mockSession, 'match-1', {
+          team: TeamGroup.TEAM_A,
+          delta: 1,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('increments Team A atomically', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_A,
+        delta: 1,
+      });
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'match-1',
+          status: { in: [MatchStatus.PLAYING] },
+        },
+        data: { scoreTeamA: { increment: 1 } },
+      });
+    });
+
+    it('increments Team B atomically', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_B,
+        delta: 1,
+      });
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'match-1',
+          status: { in: [MatchStatus.PLAYING] },
+        },
+        data: { scoreTeamB: { increment: 1 } },
+      });
+    });
+
+    it('guards a decrement behind a score above zero', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_A,
+        delta: -1,
+      });
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'match-1',
+          status: { in: [MatchStatus.PLAYING] },
+          scoreTeamA: { gt: 0 },
+        },
+        data: { scoreTeamA: { increment: -1 } },
+      });
+    });
+
+    it('refuses to decrement a team already at zero', async () => {
+      primeScore(MatchStatus.PLAYING, { scoreTeamA: 0, scoreTeamB: 3 });
+
+      await expect(
+        service.adjustMatchScore(mockSession, 'match-1', {
+          team: TeamGroup.TEAM_A,
+          delta: -1,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws Conflict when the guarded update matches no row', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.adjustMatchScore(mockSession, 'match-1', {
+          team: TeamGroup.TEAM_A,
+          delta: 1,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('treats a zero delta as a no-op', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_A,
+        delta: 0,
+      });
+
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+      expect(mockPrisma.sessionMatch.findUnique).toHaveBeenCalled();
+    });
+
+    it('returns the updated match', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      const result = await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_A,
+        delta: 1,
+      });
+
+      expect(result).toEqual({
+        id: 'match-1',
+        status: MatchStatus.PLAYING,
+        ...playing,
+      });
+      expect(mockPrisma.sessionMatch.findUnique).toHaveBeenCalledWith({
+        where: { id: 'match-1' },
+        include: MATCH_DETAIL_INCLUDE,
+      });
+    });
+
+    it('runs inside a single transaction', async () => {
+      primeScore(MatchStatus.PLAYING, playing);
+
+      await service.adjustMatchScore(mockSession, 'match-1', {
+        team: TeamGroup.TEAM_A,
+        delta: 1,
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 });

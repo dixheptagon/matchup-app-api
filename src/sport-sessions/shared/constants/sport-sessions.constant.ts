@@ -45,6 +45,9 @@ export const ASSIGNABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.QUEUED];
 /** Matches that can be put into play, i.e. court already assigned. */
 export const STARTABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.READY];
 
+/** Matches that accept live score changes, i.e. currently in play. */
+export const SCORABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
+
 /** Player states returned to WAITING when their match is cancelled. */
 export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.RESERVED,

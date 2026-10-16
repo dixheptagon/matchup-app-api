@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -22,6 +23,7 @@ import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchQueueQueryDto } from './dto/match-queue-query.dto.js';
 import { CancelMatchDto } from './dto/cancel-match.dto.js';
 import { AssignCourtDto } from './dto/assign-court.dto.js';
+import { UpdateMatchScoreDto } from './dto/update-match-score.dto.js';
 
 @Controller('sport-clubs/:clubSlug/sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -78,6 +80,19 @@ export class SessionMatchesController {
     @Param('matchId') matchId: string,
   ) {
     return this.sessionMatchesService.startMatch(session, matchId);
+  }
+
+  // Match Scoring
+
+  @Patch(':sessionId/matches/:matchId/score')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async adjustMatchScore(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+    @Body() dto: UpdateMatchScoreDto,
+  ) {
+    return this.sessionMatchesService.adjustMatchScore(session, matchId, dto);
   }
 
   // Matchmaking

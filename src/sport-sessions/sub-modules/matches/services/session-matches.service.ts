@@ -10,6 +10,7 @@ import {
   CourtStatus,
   MatchStatus,
   PlayerStatus,
+  TeamGroup,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import {
   ASSIGNABLE_MATCH_STATUSES,
@@ -17,6 +18,7 @@ import {
   MATCH_DETAIL_INCLUDE,
   QUEUE_MATCH_STATUSES,
   RELEASABLE_PLAYER_STATUSES,
+  SCORABLE_MATCH_STATUSES,
   SOFT_CANCEL_MATCH_STATUSES,
   STARTABLE_MATCH_STATUSES,
 } from '../../../shared/constants/sport-sessions.constant.js';
@@ -25,8 +27,16 @@ import type { SessionContext } from '../../../shared/types/sport-sessions.types.
 import { MatchQueueQueryDto } from '../dto/match-queue-query.dto.js';
 import { CancelMatchDto } from '../dto/cancel-match.dto.js';
 import { AssignCourtDto } from '../dto/assign-court.dto.js';
+import { UpdateMatchScoreDto } from '../dto/update-match-score.dto.js';
 
 type Tx = Prisma.TransactionClient;
+
+type ScoreField = 'scoreTeamA' | 'scoreTeamB';
+
+function scoreFieldFor(team: TeamGroup): ScoreField {
+  return team === TeamGroup.TEAM_A ? 'scoreTeamA' : 'scoreTeamB';
+}
+
 
 @Injectable()
 export class SessionMatchesService {
@@ -277,6 +287,88 @@ export class SessionMatchesService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Applies a single point change to one team's live score while the match is
+   * in play.
+   *
+   * Scores live on the match itself so they can be maintained with an atomic
+   * increment; the MatchResult row is reserved for the final result written
+   * when the match is finished.
+   *
+   * The read above only produces a friendly "already at zero" message. The
+   * guarded updateMany is what actually keeps the score from going negative: an
+   * increment has no precondition, a decrement requires the score to be above
+   * zero, and both re-check that the match is still PLAYING.
+   */
+  async adjustMatchScore(
+    session: SessionContext,
+    matchId: string,
+    dto: UpdateMatchScoreDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const match = await tx.sessionMatch.findFirst({
+        where: { id: matchId, sessionId: session.id },
+      });
+
+      if (!match) {
+        throw new NotFoundException('Match not found');
+      }
+
+      if (!SCORABLE_MATCH_STATUSES.includes(match.status)) {
+        throw new BadRequestException(
+          `Cannot score a ${match.status} match`,
+        );
+      }
+
+      const settings = await tx.sessionSettings.findUnique({
+        where: { sessionId: session.id },
+        select: { trackMatchScore: true },
+      });
+
+      if (settings && !settings.trackMatchScore) {
+        throw new BadRequestException(
+          'Score tracking is disabled for this session',
+        );
+      }
+
+      if (dto.delta === 0) {
+        return this.findMatchDetail(tx, match.id);
+      }
+
+      const field = scoreFieldFor(dto.team);
+
+      if (dto.delta < 0 && match[field] <= 0) {
+        throw new BadRequestException(
+          `Team ${dto.team === TeamGroup.TEAM_A ? 'A' : 'B'} score is already 0`,
+        );
+      }
+
+      const update = await tx.sessionMatch.updateMany({
+        where: {
+          id: match.id,
+          status: { in: SCORABLE_MATCH_STATUSES },
+          ...(dto.delta < 0 ? { [field]: { gt: 0 } } : {}),
+        },
+        data: { [field]: { increment: dto.delta } },
+      });
+
+      if (update.count === 0) {
+        throw new ConflictException(
+          'Score was not applied because the match changed or is no longer playing',
+        );
+      }
+
+      return this.findMatchDetail(tx, match.id);
+    });
+  }
+
+  private async findMatchDetail(tx: Tx, matchId: string) {
+    return tx.sessionMatch.findUnique({
+      where: { id: matchId },
+      include: MATCH_DETAIL_INCLUDE,
+    });
   }
 
   private async releaseCourt(tx: Tx, sessionCourtId: number | null | undefined) {
