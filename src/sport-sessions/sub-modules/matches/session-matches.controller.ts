@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
@@ -24,6 +25,11 @@ import { MatchQueueQueryDto } from './dto/match-queue-query.dto.js';
 import { CancelMatchDto } from './dto/cancel-match.dto.js';
 import { AssignCourtDto } from './dto/assign-court.dto.js';
 import { UpdateMatchScoreDto } from './dto/update-match-score.dto.js';
+import { FinishMatchDto } from './dto/finish-match.dto.js';
+
+interface AuthenticatedRequest {
+  user: { id: string };
+}
 
 @Controller('sport-clubs/:clubSlug/sessions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -80,6 +86,26 @@ export class SessionMatchesController {
     @Param('matchId') matchId: string,
   ) {
     return this.sessionMatchesService.startMatch(session, matchId);
+  }
+
+  // Match Finish
+
+  @Post(':sessionId/matches/:matchId/finish')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async finishMatch(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: FinishMatchDto,
+  ) {
+    const { match, result } = await this.sessionMatchesService.finishMatch(
+      session,
+      matchId,
+      req.user.id,
+      dto,
+    );
+    return { ...match, result };
   }
 
   // Match Scoring

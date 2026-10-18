@@ -15,6 +15,7 @@ import {
 import {
   ACTIVE_MATCH_STATUSES,
   buildEligiblePlayersWhere,
+  promoteRestedPlayers,
 } from '../../../shared/helpers/sport-sessions.helper.js';
 import {
   MATCH_DETAIL_INCLUDE,
@@ -52,6 +53,10 @@ export class SessionMatchmakingService {
           );
         }
 
+        // Players on cooldown rejoin the pool here, because there is no
+        // scheduler to move them back once their rest has elapsed.
+        await promoteRestedPlayers(tx, session.id);
+
         const eligible = await tx.sessionPlayer.findMany({
           where: buildEligiblePlayersWhere(session.id),
           include: { clubMember: true },
@@ -84,6 +89,7 @@ export class SessionMatchmakingService {
 
   async createManualMatch(session: SessionContext, dto: CreateMatchDto) {
     return this.runMatchmakingTx(session.id, async (tx) => {
+      await promoteRestedPlayers(tx, session.id);
       await this.assertPlayersAvailable(tx, session.id, dto);
 
       return this.persistMatch(

@@ -10,24 +10,32 @@ import {
   CourtStatus,
   MatchStatus,
   PlayerStatus,
+  ScoringType,
   TeamGroup,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import {
   ASSIGNABLE_MATCH_STATUSES,
   DELETABLE_MATCH_STATUSES,
+  FINISHABLE_MATCH_STATUSES,
   MATCH_DETAIL_INCLUDE,
+  MILLISECONDS_PER_MINUTE,
   QUEUE_MATCH_STATUSES,
   RELEASABLE_PLAYER_STATUSES,
   SCORABLE_MATCH_STATUSES,
   SOFT_CANCEL_MATCH_STATUSES,
   STARTABLE_MATCH_STATUSES,
 } from '../../../shared/constants/sport-sessions.constant.js';
-import { allocateMatchSequence } from '../../../shared/helpers/sport-sessions.helper.js';
+import {
+  allocateMatchSequence,
+  resolveWinningTeam,
+} from '../../../shared/helpers/sport-sessions.helper.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import { MatchQueueQueryDto } from '../dto/match-queue-query.dto.js';
 import { CancelMatchDto } from '../dto/cancel-match.dto.js';
 import { AssignCourtDto } from '../dto/assign-court.dto.js';
 import { UpdateMatchScoreDto } from '../dto/update-match-score.dto.js';
+import { FinishMatchDto } from '../dto/finish-match.dto.js';
+import { SessionMatchResultService } from './session-match-result.service.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,10 +45,12 @@ function scoreFieldFor(team: TeamGroup): ScoreField {
   return team === TeamGroup.TEAM_A ? 'scoreTeamA' : 'scoreTeamB';
 }
 
-
 @Injectable()
 export class SessionMatchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly matchResults: SessionMatchResultService,
+  ) {}
 
   async getMatchQueue(session: SessionContext, query: MatchQueueQueryDto = {}) {
     const where = {
@@ -362,6 +372,115 @@ export class SessionMatchesService {
 
       return this.findMatchDetail(tx, match.id);
     });
+  }
+
+  /**
+   * Ends a live match: marks it finished, credits each player with the game they
+   * just played, puts them on cooldown, and hands the court back.
+   *
+   * The outcome is resolved and validated *inside* this transaction, before
+   * anything is written, so a rejected finish (a draw, or a leader short of
+   * pointsToWin) leaves the match untouched. Only once the match is safely
+   * finished does the derived work happen, in a separate transaction.
+   */
+  async finishMatch(
+    session: SessionContext,
+    matchId: string,
+    actingUserId: string,
+    dto: FinishMatchDto = {},
+  ) {
+    const finished = await this.prisma.$transaction(async (tx) => {
+      const match = await tx.sessionMatch.findFirst({
+        where: { id: matchId, sessionId: session.id },
+        include: {
+          players: {
+            select: { sessionPlayerId: true, team: true },
+          },
+        },
+      });
+
+      if (!match) {
+        throw new NotFoundException('Match not found');
+      }
+
+      if (!FINISHABLE_MATCH_STATUSES.includes(match.status)) {
+        throw new BadRequestException(`Cannot finish a ${match.status} match`);
+      }
+
+      const settings = await tx.sessionSettings.findUnique({
+        where: { sessionId: session.id },
+      });
+
+      const winningTeam = resolveWinningTeam({
+        scoreTeamA: match.scoreTeamA,
+        scoreTeamB: match.scoreTeamB,
+        trackMatchScore: settings?.trackMatchScore ?? true,
+        pointsToWin: settings?.pointsToWin ?? null,
+        allowEndWithoutScore: settings?.allowEndWithoutScore ?? false,
+        requestedTeam: dto.winningTeam,
+      });
+
+      const endedAt = new Date();
+
+      // Lock order is match -> players -> court, matching cancelMatch.
+      const matchUpdate = await tx.sessionMatch.updateMany({
+        where: { id: match.id, status: { in: FINISHABLE_MATCH_STATUSES } },
+        data: { status: MatchStatus.FINISHED, endedAt },
+      });
+
+      if (matchUpdate.count === 0) {
+        throw new ConflictException('Match was finished by another request');
+      }
+
+      const playerIds = match.players.map((player) => player.sessionPlayerId);
+      const restMinutes = settings?.minimumRestTime ?? 0;
+
+      // Players who left mid-match are not PLAYING any more, so the guard skips
+      // them: they played no part of this game and get neither credit nor rest.
+      await tx.sessionPlayer.updateMany({
+        where: { id: { in: playerIds }, status: PlayerStatus.PLAYING },
+        data: {
+          playCount: { increment: 1 },
+          lastMatchFinishedAt: endedAt,
+          ...(restMinutes > 0
+            ? {
+                status: PlayerStatus.RESTING,
+                restUntil: new Date(
+                  endedAt.getTime() + restMinutes * MILLISECONDS_PER_MINUTE,
+                ),
+              }
+            : { status: PlayerStatus.WAITING, restUntil: null }),
+        },
+      });
+
+      await this.releaseCourt(tx, match.sessionCourtId);
+
+      return {
+        match: await this.findMatchDetail(tx, match.id),
+        resolution: {
+          winningTeam,
+          scoreTeamA: settings?.trackMatchScore ?? true
+            ? match.scoreTeamA
+            : null,
+          scoreTeamB: settings?.trackMatchScore ?? true
+            ? match.scoreTeamB
+            : null,
+          players: match.players,
+          notes: dto.notes,
+          leaderBoardMode: settings?.leaderBoardMode ?? ScoringType.OFF,
+        },
+      };
+    });
+
+    const result = await this.matchResults.record({
+      matchId,
+      clubId: session.clubId,
+      sessionId: session.id,
+      actingUserId,
+      ...finished.resolution,
+    });
+
+    return { ...finished, result };
   }
 
   private async findMatchDetail(tx: Tx, matchId: string) {

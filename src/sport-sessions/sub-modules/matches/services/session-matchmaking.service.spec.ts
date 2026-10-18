@@ -224,7 +224,15 @@ describe('SessionMatchmakingService', () => {
       await service.autoMatch(mockSession);
 
       expect(
-        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0],
+        mockPrisma.sessionPlayer.updateMany.mock.calls
+          .map((call: unknown[], index: number) =>
+            (call[0] as { where?: { id?: unknown } }).where?.id
+              ? mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[
+                  index
+                ]
+              : null,
+          )
+          .find((order) => order !== null),
       ).toBeLessThan(
         mockPrisma.sessionMatch.create.mock.invocationCallOrder[0],
       );
@@ -240,6 +248,33 @@ describe('SessionMatchmakingService', () => {
 
       expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
       expect(mockPrisma.matchPlayer.createMany).not.toHaveBeenCalled();
+    });
+
+    it('returns rested players to the waiting pool before selecting', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          sessionId: 'session-1',
+          status: 'RESTING',
+          OR: [{ restUntil: null }, { restUntil: { lte: expect.any(Date) } }],
+        },
+        data: { status: 'WAITING', restUntil: null },
+      });
+    });
+
+    it('promotes rested players before reading the pool', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      const promotionOrder =
+        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0];
+      expect(promotionOrder).toBeLessThan(
+        mockPrisma.sessionPlayer.findMany.mock.invocationCallOrder[0],
+      );
     });
 
     it('takes a session-scoped advisory lock', async () => {
@@ -307,10 +342,12 @@ describe('SessionMatchmakingService', () => {
 
       expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(2);
       expect(
-        mockPrisma.sessionPlayer.updateMany.mock.calls.map(
-          (call: unknown[]) =>
-            (call[0] as { where: { id: { in: number[] } } }).where.id.in,
-        ),
+        mockPrisma.sessionPlayer.updateMany.mock.calls
+          .map(
+            (call: unknown[]) =>
+              (call[0] as { where: { id?: { in: number[] } } }).where.id?.in,
+          )
+          .filter(Boolean),
       ).toEqual([
         [1, 2, 3, 4],
         [5, 6, 7, 8],

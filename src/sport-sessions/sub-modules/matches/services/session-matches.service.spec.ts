@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SessionMatchesService } from './session-matches.service.js';
+import { SessionMatchResultService } from './session-match-result.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
 import { Prisma } from '../../../../../prisma/generated/prisma/client.js';
 import { MATCH_DETAIL_INCLUDE } from '../../../shared/constants/sport-sessions.constant.js';
@@ -8,13 +9,16 @@ import {
   CourtStatus,
   MatchStatus,
   PlayerStatus,
+  ScoringType,
   TeamGroup,
 } from '../../../../../prisma/generated/prisma/enums.js';
+import { MILLISECONDS_PER_MINUTE } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
 describe('SessionMatchesService', () => {
   let service: SessionMatchesService;
   let mockPrisma: any;
+  let matchResults: { record: ReturnType<typeof vi.fn> };
 
   const mockSession: SessionContext = {
     id: 'session-1',
@@ -52,10 +56,13 @@ describe('SessionMatchesService', () => {
       Array.isArray(arg) ? Promise.all(arg) : (arg as Function)(mockPrisma),
     );
 
+    matchResults = { record: vi.fn().mockResolvedValue({ id: 'result-1' }) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionMatchesService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: SessionMatchResultService, useValue: matchResults },
       ],
     }).compile();
 
@@ -769,6 +776,330 @@ describe('SessionMatchesService', () => {
         team: TeamGroup.TEAM_A,
         delta: 1,
       });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('finishMatch', () => {
+    const squad = [
+      { sessionPlayerId: 1, team: TeamGroup.TEAM_A },
+      { sessionPlayerId: 2, team: TeamGroup.TEAM_A },
+      { sessionPlayerId: 3, team: TeamGroup.TEAM_B },
+      { sessionPlayerId: 4, team: TeamGroup.TEAM_B },
+    ];
+
+    const baseSettings = {
+      trackMatchScore: true,
+      allowEndWithoutScore: false,
+      pointsToWin: 21,
+      minimumRestTime: 5,
+      leaderBoardMode: ScoringType.SCORE_DIFF,
+    };
+
+    function primeFinish(
+      overrides: {
+        status?: MatchStatus;
+        scoreTeamA?: number;
+        scoreTeamB?: number;
+        settings?: Partial<typeof baseSettings>;
+        sessionCourtId?: number | null;
+      } = {},
+    ) {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue({
+        id: 'match-1',
+        status: overrides.status ?? MatchStatus.PLAYING,
+        sessionCourtId:
+          'sessionCourtId' in overrides ? overrides.sessionCourtId : 7,
+        scoreTeamA: overrides.scoreTeamA ?? 21,
+        scoreTeamB: overrides.scoreTeamB ?? 18,
+        players: squad,
+      });
+      mockPrisma.sessionSettings.findUnique.mockResolvedValue({
+        ...baseSettings,
+        ...overrides.settings,
+      });
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 4 });
+      mockPrisma.sessionCourt.update.mockResolvedValue({ id: 7 });
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+    }
+
+    it('throws NotFound when the match is not in the session', async () => {
+      mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.finishMatch(mockSession, 'missing', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      MatchStatus.QUEUED,
+      MatchStatus.READY,
+      MatchStatus.FINISHED,
+      MatchStatus.CANCELLED,
+    ])('rejects finishing a %s match', async (status) => {
+      primeFinish({ status });
+
+      await expect(
+        service.finishMatch(mockSession, 'match-1', 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('marks the match finished with an end timestamp', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionMatch.updateMany).toHaveBeenCalledWith({
+        where: { id: 'match-1', status: { in: [MatchStatus.PLAYING] } },
+        data: { status: MatchStatus.FINISHED, endedAt: expect.any(Date) },
+      });
+    });
+
+    it('credits each playing player and puts them on cooldown', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [1, 2, 3, 4] },
+          status: PlayerStatus.PLAYING,
+        },
+        data: {
+          playCount: { increment: 1 },
+          lastMatchFinishedAt: expect.any(Date),
+          status: PlayerStatus.RESTING,
+          restUntil: expect.any(Date),
+        },
+      });
+    });
+
+    it('returns players straight to waiting when no cooldown is configured', async () => {
+      primeFinish({ settings: { minimumRestTime: 0 } });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [1, 2, 3, 4] },
+          status: PlayerStatus.PLAYING,
+        },
+        data: {
+          playCount: { increment: 1 },
+          lastMatchFinishedAt: expect.any(Date),
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        },
+      });
+    });
+
+    it('sets the cooldown from the configured rest time', async () => {
+      primeFinish({ settings: { minimumRestTime: 7 } });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      const call = mockPrisma.sessionPlayer.updateMany.mock.calls[0][0];
+      const endedAt = mockPrisma.sessionMatch.updateMany.mock.calls[0][0].data
+        .endedAt as Date;
+      const restUntil = call.data.restUntil as Date;
+
+      expect(restUntil.getTime() - endedAt.getTime()).toBe(
+        7 * MILLISECONDS_PER_MINUTE,
+      );
+    });
+
+    it('skips players who are no longer playing', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: PlayerStatus.PLAYING }),
+        }),
+      );
+    });
+
+    it('releases the court', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionCourt.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: { status: CourtStatus.AVAILABLE },
+      });
+    });
+
+    it('tolerates a match with no court', async () => {
+      primeFinish({ sessionCourtId: null });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(mockPrisma.sessionCourt.update).not.toHaveBeenCalled();
+    });
+
+    it('throws Conflict when the guarded update loses the race', async () => {
+      primeFinish();
+      mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.finishMatch(mockSession, 'match-1', 'user-1'),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.sessionPlayer.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('locks the match before the players and court', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      const order = [
+        mockPrisma.sessionMatch.updateMany.mock.invocationCallOrder[0],
+        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0],
+        mockPrisma.sessionCourt.update.mock.invocationCallOrder[0],
+      ];
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+    });
+
+    it('rejects a drawn match before writing anything', async () => {
+      primeFinish({ scoreTeamA: 20, scoreTeamB: 20 });
+
+      await expect(
+        service.finishMatch(mockSession, 'match-1', 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+      expect(matchResults.record).not.toHaveBeenCalled();
+    });
+
+    it('accepts a drawn match when ending without a result is allowed', async () => {
+      primeFinish({
+        scoreTeamA: 20,
+        scoreTeamB: 20,
+        settings: { allowEndWithoutScore: true },
+      });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(matchResults.record).toHaveBeenCalledWith(
+        expect.objectContaining({ winningTeam: null }),
+      );
+    });
+
+    it('rejects a leader short of pointsToWin', async () => {
+      primeFinish({ scoreTeamA: 20, scoreTeamB: 18 });
+
+      await expect(
+        service.finishMatch(mockSession, 'match-1', 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('accepts a leader short of pointsToWin when allowed', async () => {
+      primeFinish({
+        scoreTeamA: 20,
+        scoreTeamB: 18,
+        settings: { allowEndWithoutScore: true },
+      });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(matchResults.record).toHaveBeenCalledWith(
+        expect.objectContaining({ winningTeam: TeamGroup.TEAM_A }),
+      );
+    });
+
+    it('does not enforce pointsToWin when it is not configured', async () => {
+      primeFinish({
+        scoreTeamA: 5,
+        scoreTeamB: 3,
+        settings: { pointsToWin: null },
+      });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      expect(matchResults.record).toHaveBeenCalledWith(
+        expect.objectContaining({ winningTeam: TeamGroup.TEAM_A }),
+      );
+    });
+
+    it('requires a winningTeam when the session does not track score', async () => {
+      primeFinish({ settings: { trackMatchScore: false } });
+
+      await expect(
+        service.finishMatch(mockSession, 'match-1', 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('uses the requested winningTeam when the session does not track score', async () => {
+      primeFinish({ settings: { trackMatchScore: false } });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1', {
+        winningTeam: TeamGroup.TEAM_B,
+      });
+
+      expect(matchResults.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          winningTeam: TeamGroup.TEAM_B,
+          scoreTeamA: null,
+          scoreTeamB: null,
+        }),
+      );
+    });
+
+    it('ignores a requested winningTeam when scores are tracked', async () => {
+      primeFinish({ scoreTeamA: 21, scoreTeamB: 18 });
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1', {
+        winningTeam: TeamGroup.TEAM_B,
+      });
+
+      expect(matchResults.record).toHaveBeenCalledWith(
+        expect.objectContaining({ winningTeam: TeamGroup.TEAM_A }),
+      );
+    });
+
+    it('hands the resolved outcome to the derived phase', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1', {
+        notes: 'Great game',
+      });
+
+      expect(matchResults.record).toHaveBeenCalledWith({
+        matchId: 'match-1',
+        clubId: mockSession.clubId,
+        sessionId: mockSession.id,
+        actingUserId: 'user-1',
+        winningTeam: TeamGroup.TEAM_A,
+        scoreTeamA: 21,
+        scoreTeamB: 18,
+        leaderBoardMode: ScoringType.SCORE_DIFF,
+        players: squad,
+        notes: 'Great game',
+      });
+    });
+
+    it('records the derived data only after the match is finished', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
+
+      const finishOrder =
+        mockPrisma.sessionMatch.updateMany.mock.invocationCallOrder[0];
+      expect(matchResults.record.mock.invocationCallOrder[0]).toBeGreaterThan(
+        finishOrder,
+      );
+    });
+
+    it('runs the core work in a single transaction', async () => {
+      primeFinish();
+
+      await service.finishMatch(mockSession, 'match-1', 'user-1');
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     });

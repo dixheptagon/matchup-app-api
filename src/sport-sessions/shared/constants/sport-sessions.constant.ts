@@ -48,6 +48,9 @@ export const STARTABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.READY];
 /** Matches that accept live score changes, i.e. currently in play. */
 export const SCORABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
 
+/** Matches that can be ended, i.e. live matches with an outcome to record. */
+export const FINISHABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
+
 /** Player states returned to WAITING when their match is cancelled. */
 export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.RESERVED,
@@ -94,6 +97,9 @@ export const ACTIVE_EDITABLE_SETTINGS: readonly string[] = [
 
 export const MIN_COURTS_TO_START = 1;
 export const MIN_PLAYERS_TO_START = 4;
+
+/** minimumRestTime is stored in minutes; restUntil needs it in milliseconds. */
+export const MILLISECONDS_PER_MINUTE = 60_000;
 
 // ─── Fairness weighting ──────────────────────────────────
 
