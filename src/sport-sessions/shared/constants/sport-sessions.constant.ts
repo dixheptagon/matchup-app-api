@@ -5,6 +5,7 @@ import {
   MatchStatus,
   PlayerStatus,
   PriorityLevel,
+  SkillLevel,
 } from '../../../../prisma/generated/prisma/enums.js';
 
 /**
@@ -100,6 +101,30 @@ export const MIN_PLAYERS_TO_START = 4;
 
 /** minimumRestTime is stored in minutes; restUntil needs it in milliseconds. */
 export const MILLISECONDS_PER_MINUTE = 60_000;
+
+// ─── Session roster ─────────────────────────────────────
+
+/**
+ * Display order for a session roster: live players first, then the ones waiting
+ * to play, then arrived-but-not-checked-in, then those who left. Used for the
+ * default sort and the `sortBy=status` comparison.
+ */
+export const PLAYER_STATUS_ORDER: Record<PlayerStatus, number> = {
+  PLAYING: 0,
+  RESERVED: 1,
+  RESTING: 2,
+  WAITING: 3,
+  NOT_ARRIVED: 4,
+  LEFT: 5,
+};
+
+/** Ascending skill order for the roster sort: NEWBIE -> ADVANCE. */
+export const SKILL_ORDER: Record<SkillLevel, number> = {
+  NEWBIE: 0,
+  BEGINNER: 1,
+  INTERMEDIATE: 2,
+  ADVANCE: 3,
+};
 
 // ─── Fairness weighting ──────────────────────────────────
 

@@ -24,6 +24,8 @@ import { SessionMatchmakingService } from './sub-modules/matches/services/sessio
 import { SessionMatchesService } from './sub-modules/matches/services/session-matches.service.js';
 import { SessionMatchResultService } from './sub-modules/matches/services/session-match-result.service.js';
 import { MatchCompositionService } from './sub-modules/matches/services/match-composition.service.js';
+import { SessionStatsController } from './sub-modules/stats/session-stats.controller.js';
+import { SessionStatsService } from './sub-modules/stats/services/session-stats.service.js';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { MatchCompositionService } from './sub-modules/matches/services/match-co
     SessionSettingsController,
     SessionPlayerEligibilityController,
     SessionMatchesController,
+    SessionStatsController,
   ],
   providers: [
     SportSessionsService,
@@ -56,6 +59,7 @@ import { MatchCompositionService } from './sub-modules/matches/services/match-co
     SessionMatchesService,
     SessionMatchResultService,
     MatchCompositionService,
+    SessionStatsService,
   ],
 })
 export class SportSessionsModule {}

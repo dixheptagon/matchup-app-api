@@ -792,7 +792,7 @@ describe('SessionMatchesService', () => {
     const baseSettings = {
       trackMatchScore: true,
       allowEndWithoutScore: false,
-      pointsToWin: 21,
+      pointsToWin: 21 as number | null,
       minimumRestTime: 5,
       leaderBoardMode: ScoringType.SCORE_DIFF,
     };

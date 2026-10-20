@@ -93,11 +93,10 @@ describe('SessionMatchmakingService', () => {
       },
     };
     mockPrisma.$queryRaw = vi.fn().mockResolvedValue([]);
-    mockPrisma.$transaction = vi.fn(
-      async (arg: unknown) =>
-        typeof arg === 'function'
-          ? (arg as Function)(mockPrisma)
-          : Promise.all(arg as Promise<unknown>[]),
+    mockPrisma.$transaction = vi.fn(async (arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as Function)(mockPrisma)
+        : Promise.all(arg as Promise<unknown>[]),
     );
 
     composition = {
@@ -143,7 +142,9 @@ describe('SessionMatchmakingService', () => {
 
     it('rejects when there are not enough waiting players', async () => {
       mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
-      mockPrisma.sessionPlayer.findMany.mockResolvedValue(eligibleRows.slice(0, 3));
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue(
+        eligibleRows.slice(0, 3),
+      );
 
       await expect(service.autoMatch(mockSession)).rejects.toThrow(
         BadRequestException,
@@ -180,13 +181,10 @@ describe('SessionMatchmakingService', () => {
 
       await service.autoMatch(mockSession);
 
-      expect(composition.compose).toHaveBeenCalledWith(
-        expect.any(Array),
-        {
-          mode: MatchMakingMode.BALANCED,
-          genderPreference: null,
-        },
-      );
+      expect(composition.compose).toHaveBeenCalledWith(expect.any(Array), {
+        mode: MatchMakingMode.BALANCED,
+        genderPreference: null,
+      });
     });
 
     it('persists four match players across both teams', async () => {
@@ -196,10 +194,30 @@ describe('SessionMatchmakingService', () => {
 
       expect(mockPrisma.matchPlayer.createMany).toHaveBeenCalledWith({
         data: [
-          { matchId: 'match-1', sessionPlayerId: 1, team: 'TEAM_A', position: 1 },
-          { matchId: 'match-1', sessionPlayerId: 2, team: 'TEAM_A', position: 2 },
-          { matchId: 'match-1', sessionPlayerId: 3, team: 'TEAM_B', position: 1 },
-          { matchId: 'match-1', sessionPlayerId: 4, team: 'TEAM_B', position: 2 },
+          {
+            matchId: 'match-1',
+            sessionPlayerId: 1,
+            team: 'TEAM_A',
+            position: 1,
+          },
+          {
+            matchId: 'match-1',
+            sessionPlayerId: 2,
+            team: 'TEAM_A',
+            position: 2,
+          },
+          {
+            matchId: 'match-1',
+            sessionPlayerId: 3,
+            team: 'TEAM_B',
+            position: 1,
+          },
+          {
+            matchId: 'match-1',
+            sessionPlayerId: 4,
+            team: 'TEAM_B',
+            position: 2,
+          },
         ],
       });
     });
@@ -232,7 +250,7 @@ describe('SessionMatchmakingService', () => {
                 ]
               : null,
           )
-          .find((order) => order !== null),
+          .find((order = null) => order !== null),
       ).toBeLessThan(
         mockPrisma.sessionMatch.create.mock.invocationCallOrder[0],
       );
@@ -292,9 +310,7 @@ describe('SessionMatchmakingService', () => {
 
       await service.autoMatch(mockSession);
 
-      expect(
-        mockPrisma.$queryRaw.mock.invocationCallOrder[0],
-      ).toBeLessThan(
+      expect(mockPrisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
         mockPrisma.sessionPlayer.findMany.mock.invocationCallOrder[0],
       );
     });
@@ -311,7 +327,9 @@ describe('SessionMatchmakingService', () => {
       await service.autoMatch(mockSession);
 
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(mockPrisma.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+      );
     });
 
     it('leaves isolation at the default instead of Serializable', async () => {
@@ -325,8 +343,16 @@ describe('SessionMatchmakingService', () => {
     it('serialises a second concurrent auto-match onto the same lock', async () => {
       primeAutoPath();
       composition.compose
-        .mockReturnValueOnce({ teamA: [1, 2], teamB: [3, 4], selected: [1, 2, 3, 4] })
-        .mockReturnValueOnce({ teamA: [5, 6], teamB: [7, 8], selected: [5, 6, 7, 8] });
+        .mockReturnValueOnce({
+          teamA: [1, 2],
+          teamB: [3, 4],
+          selected: [1, 2, 3, 4],
+        })
+        .mockReturnValueOnce({
+          teamA: [5, 6],
+          teamB: [7, 8],
+          selected: [5, 6, 7, 8],
+        });
 
       const first = service.autoMatch(mockSession);
       // The pool now excludes the players reserved by the first match.
@@ -440,10 +466,30 @@ describe('SessionMatchmakingService', () => {
       expect(composition.compose).not.toHaveBeenCalled();
       expect(mockPrisma.matchPlayer.createMany).toHaveBeenCalledWith({
         data: [
-          { matchId: 'match-2', sessionPlayerId: 1, team: 'TEAM_A', position: 1 },
-          { matchId: 'match-2', sessionPlayerId: 2, team: 'TEAM_A', position: 2 },
-          { matchId: 'match-2', sessionPlayerId: 3, team: 'TEAM_B', position: 1 },
-          { matchId: 'match-2', sessionPlayerId: 4, team: 'TEAM_B', position: 2 },
+          {
+            matchId: 'match-2',
+            sessionPlayerId: 1,
+            team: 'TEAM_A',
+            position: 1,
+          },
+          {
+            matchId: 'match-2',
+            sessionPlayerId: 2,
+            team: 'TEAM_A',
+            position: 2,
+          },
+          {
+            matchId: 'match-2',
+            sessionPlayerId: 3,
+            team: 'TEAM_B',
+            position: 1,
+          },
+          {
+            matchId: 'match-2',
+            sessionPlayerId: 4,
+            team: 'TEAM_B',
+            position: 2,
+          },
         ],
       });
     });
