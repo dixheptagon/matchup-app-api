@@ -12,8 +12,10 @@ import { SessionCheckinService } from './sub-modules/players/services/session-ch
 import { SportSessionsController } from './sport-sessions.controller.js';
 import { SessionsPublicController } from './sessions.public.controller.js';
 import { SessionPlayersService } from './sub-modules/players/services/session-player-draft.service.js';
+import { SessionPlayerRestService } from './sub-modules/players/services/session-player-rest.service.js';
 import { SessionGuard } from './shared/guards/session.guard.js';
 import { SessionPlayerController } from './sub-modules/players/session-player-draft.controller.js';
+import { SessionPlayerRestController } from './sub-modules/players/session-player-rest.controller.js';
 import { SessionCourtsController } from './sub-modules/courts/session-courts.controller.js';
 import { SessionSettingsController } from './sub-modules/settings/session-settings.controller.js';
 import { SessionPlayerEligibilityService } from './sub-modules/players/services/session-player-eligibility.service.js';
@@ -38,6 +40,7 @@ import { SessionStatsService } from './sub-modules/stats/services/session-stats.
     SessionsPublicController,
     SessionCheckinController,
     SessionPlayerController,
+    SessionPlayerRestController,
     SessionCourtsController,
     SessionSettingsController,
     SessionPlayerEligibilityController,
@@ -49,6 +52,7 @@ import { SessionStatsService } from './sub-modules/stats/services/session-stats.
     SessionSettingsService,
     SessionCourtsService,
     SessionPlayersService,
+    SessionPlayerRestService,
     JwtStrategy,
     RolesGuard,
     SessionGuard,

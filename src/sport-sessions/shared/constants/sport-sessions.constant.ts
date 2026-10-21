@@ -58,6 +58,12 @@ export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.PLAYING,
 ];
 
+/** Players that may be put on rest manually (waiting, or already resting). */
+export const RESTABLE_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.WAITING,
+  PlayerStatus.RESTING,
+];
+
 export const SESSION_DETAIL_INCLUDE = {
   sessionSettings: true,
   sessionCourts: { include: { court: true } },
