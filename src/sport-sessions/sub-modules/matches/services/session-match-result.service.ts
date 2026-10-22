@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
 import { Prisma } from '../../../../../prisma/generated/prisma/client.js';
 import {
+  MatchStatus,
   RoleType,
   ScoringType,
   TeamGroup,
@@ -10,6 +11,12 @@ import {
 export interface MatchResultPlayer {
   sessionPlayerId: number;
   team: TeamGroup;
+}
+
+/** What undo needs to write back to the roster after a recompute. */
+export interface PlayerAggregate {
+  playCount: number;
+  lastMatchFinishedAt: Date | null;
 }
 
 export interface MatchResultInput {
@@ -145,7 +152,14 @@ export class SessionMatchResultService {
     const scoreA = input.scoreTeamA ?? 0;
     const scoreB = input.scoreTeamB ?? 0;
 
-    for (const player of input.players) {
+    // Ascending sessionPlayerId matches the lock order used by
+    // reconcilePlayers so a concurrent undo and finish never deadlock on the
+    // stat rows.
+    const players = [...input.players].sort(
+      (left, right) => left.sessionPlayerId - right.sessionPlayerId,
+    );
+
+    for (const player of players) {
       const scored = player.team === TeamGroup.TEAM_A ? scoreA : scoreB;
       const conceded = player.team === TeamGroup.TEAM_A ? scoreB : scoreA;
 
@@ -177,5 +191,120 @@ export class SessionMatchResultService {
         },
       });
     }
+  }
+
+  /**
+   * Rebuilds leaderboard rows and roster counters for the given players after
+   * a finished match has been voided. Values are recomputed as absolute
+   * totals from the remaining finished matches and written with upsert set
+   * operations, never increments, so repeating the call is harmless and a
+   * partial earlier write is corrected rather than compounded.
+   *
+   * Returns the roster counters the undo flow writes back onto each
+   * SessionPlayer. Stat rows are locked in ascending sessionPlayerId order,
+   * the same order applyStatistics uses, so this never deadlocks against a
+   * concurrent finish of a different match sharing players.
+   */
+  async reconcilePlayers(
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    playerIds: number[],
+  ): Promise<Map<number, PlayerAggregate>> {
+    const ids = [...new Set(playerIds)].sort((left, right) => left - right);
+
+    const rows = await tx.matchPlayer.findMany({
+      where: {
+        sessionPlayerId: { in: ids },
+        match: { sessionId, status: MatchStatus.FINISHED },
+      },
+      select: {
+        sessionPlayerId: true,
+        team: true,
+        match: {
+          select: {
+            endedAt: true,
+            result: {
+              select: { winningTeam: true, scoreTeamA: true, scoreTeamB: true },
+            },
+          },
+        },
+      },
+    });
+
+    const aggregates = new Map<number, PlayerAggregate>();
+    const stats = new Map<
+      number,
+      {
+        matchesPlayed: number;
+        matchesDrawn: number;
+        matchesWon: number;
+        matchesLoss: number;
+        pointsScored: number;
+        pointsConceded: number;
+        totalPoints: number;
+      }
+    >();
+
+    for (const id of ids) {
+      aggregates.set(id, { playCount: 0, lastMatchFinishedAt: null });
+      stats.set(id, {
+        matchesPlayed: 0,
+        matchesDrawn: 0,
+        matchesWon: 0,
+        matchesLoss: 0,
+        pointsScored: 0,
+        pointsConceded: 0,
+        totalPoints: 0,
+      });
+    }
+
+    for (const row of rows) {
+      const match = row.match;
+      if (!match) continue;
+
+      const aggregate = aggregates.get(row.sessionPlayerId)!;
+      aggregate.playCount += 1;
+
+      const endedAt = match.endedAt;
+      if (
+        endedAt &&
+        (aggregate.lastMatchFinishedAt === null ||
+          endedAt > aggregate.lastMatchFinishedAt)
+      ) {
+        aggregate.lastMatchFinishedAt = endedAt;
+      }
+
+      const result = match.result;
+      if (!result) {
+        continue;
+      }
+
+      const scoreA = result.scoreTeamA ?? 0;
+      const scoreB = result.scoreTeamB ?? 0;
+      const scored = row.team === TeamGroup.TEAM_A ? scoreA : scoreB;
+      const conceded = row.team === TeamGroup.TEAM_A ? scoreB : scoreA;
+      const outcome = this.resolveOutcome(result.winningTeam, row.team);
+
+      const accumulator = stats.get(row.sessionPlayerId)!;
+      accumulator.matchesPlayed += 1;
+      accumulator.matchesDrawn += outcome.matchesDrawn;
+      accumulator.matchesWon += outcome.matchesWon;
+      accumulator.matchesLoss += outcome.matchesLoss;
+      accumulator.pointsScored += scored;
+      accumulator.pointsConceded += conceded;
+      accumulator.totalPoints += scored - conceded;
+    }
+
+    for (const id of ids) {
+      const accumulator = stats.get(id)!;
+
+      await tx.sessionPlayerStat.upsert({
+        where: { sessionPlayerId: id },
+        create: { sessionId, sessionPlayerId: id, ...accumulator },
+        update: { ...accumulator },
+      });
+    }
+
+    return aggregates;
   }
 }

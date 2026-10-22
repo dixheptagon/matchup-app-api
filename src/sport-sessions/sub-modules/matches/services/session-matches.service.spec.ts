@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SessionMatchesService } from './session-matches.service.js';
 import { SessionMatchResultService } from './session-match-result.service.js';
@@ -56,7 +56,9 @@ describe('SessionMatchesService', () => {
       Array.isArray(arg) ? Promise.all(arg) : (arg as Function)(mockPrisma),
     );
 
-    matchResults = { record: vi.fn().mockResolvedValue({ id: 'result-1' }) };
+    matchResults = {
+      record: vi.fn().mockResolvedValue({ id: 'result-1' }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -1104,4 +1106,5 @@ describe('SessionMatchesService', () => {
       expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
+
 });

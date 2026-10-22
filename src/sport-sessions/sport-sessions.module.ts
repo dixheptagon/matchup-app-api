@@ -24,6 +24,7 @@ import { SessionPlayerEligibilityController } from './sub-modules/players/sessio
 import { SessionMatchesController } from './sub-modules/matches/session-matches.controller.js';
 import { SessionMatchmakingService } from './sub-modules/matches/services/session-matchmaking.service.js';
 import { SessionMatchesService } from './sub-modules/matches/services/session-matches.service.js';
+import { SessionMatchUndoService } from './sub-modules/matches/services/session-match-undo.service.js';
 import { SessionMatchResultService } from './sub-modules/matches/services/session-match-result.service.js';
 import { MatchCompositionService } from './sub-modules/matches/services/match-composition.service.js';
 import { SessionStatsController } from './sub-modules/stats/session-stats.controller.js';
@@ -61,6 +62,7 @@ import { SessionStatsService } from './sub-modules/stats/services/session-stats.
     PlayerWeightingService,
     SessionMatchmakingService,
     SessionMatchesService,
+    SessionMatchUndoService,
     SessionMatchResultService,
     MatchCompositionService,
     SessionStatsService,

@@ -52,6 +52,9 @@ export const SCORABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
 /** Matches that can be ended, i.e. live matches with an outcome to record. */
 export const FINISHABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.PLAYING];
 
+/** Finished matches that can be voided and returned to the queue. */
+export const UNDOABLE_MATCH_STATUSES: MatchStatus[] = [MatchStatus.FINISHED];
+
 /** Player states returned to WAITING when their match is cancelled. */
 export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.RESERVED,
@@ -62,6 +65,16 @@ export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
 export const RESTABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.WAITING,
   PlayerStatus.RESTING,
+];
+
+/**
+ * Where a match's players sit once it has finished: on cooldown, or straight
+ * back to waiting. A player who checked out mid-match is in neither state, so
+ * a match containing one cannot be undone.
+ */
+export const POST_FINISH_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.RESTING,
+  PlayerStatus.WAITING,
 ];
 
 export const SESSION_DETAIL_INCLUDE = {

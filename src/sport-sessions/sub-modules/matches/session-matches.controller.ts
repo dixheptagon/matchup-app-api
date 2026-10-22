@@ -20,6 +20,7 @@ import { CurrentSession } from '../../shared/decorators/current-session.decorato
 import type { SessionContext } from '../../shared/types/sport-sessions.types.js';
 import { SessionMatchmakingService } from './services/session-matchmaking.service.js';
 import { SessionMatchesService } from './services/session-matches.service.js';
+import { SessionMatchUndoService } from './services/session-match-undo.service.js';
 import { CreateMatchDto } from './dto/create-match.dto.js';
 import { MatchQueueQueryDto } from './dto/match-queue-query.dto.js';
 import { CancelMatchDto } from './dto/cancel-match.dto.js';
@@ -38,6 +39,7 @@ export class SessionMatchesController {
   constructor(
     private readonly sessionMatchmakingService: SessionMatchmakingService,
     private readonly sessionMatchesService: SessionMatchesService,
+    private readonly sessionMatchUndoService: SessionMatchUndoService,
   ) {}
 
   // Match Queue
@@ -106,6 +108,18 @@ export class SessionMatchesController {
       dto,
     );
     return { ...match, result };
+  }
+
+  // Match Undo
+
+  @Post(':sessionId/matches/:matchId/undo')
+  @UseGuards(SessionGuard)
+  @SessionStatuses(SessionStatus.ACTIVE)
+  async undoFinishMatch(
+    @CurrentSession() session: SessionContext,
+    @Param('matchId') matchId: string,
+  ) {
+    return this.sessionMatchUndoService.undoFinishMatch(session, matchId);
   }
 
   // Match Scoring

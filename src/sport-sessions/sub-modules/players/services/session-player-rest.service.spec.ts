@@ -156,7 +156,7 @@ describe('SessionPlayerRestService', () => {
         },
         data: {
           status: PlayerStatus.RESTING,
-          restUntil: new Date('2026-01-01T00:05:00.000Z'),
+          restUntil: new Date('2026-01-01T00:08:00.000Z'),
         },
       });
     });
