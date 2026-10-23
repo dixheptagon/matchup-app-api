@@ -1,9 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SessionMatchUndoService } from './session-match-undo.service.js';
 import { SessionMatchResultService } from './session-match-result.service.js';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
-import { PlayerStatus, MatchStatus } from '../../../../../prisma/generated/prisma/enums.js';
+import {
+  PlayerStatus,
+  MatchStatus,
+} from '../../../../../prisma/generated/prisma/enums.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
 describe('SessionMatchUndoService', () => {
@@ -61,20 +68,21 @@ describe('SessionMatchUndoService', () => {
     service = module.get<SessionMatchUndoService>(SessionMatchUndoService);
   });
 
-  const primeUndo = (options: {
-    status?: MatchStatus;
-    playerIds?: number[];
-    playerStatuses?: PlayerStatus[];
-    committed?: number;
-    aggregates?: Map<
-      number,
-      { playCount: number; lastMatchFinishedAt: Date | null }
-    >;
-  } = {}) => {
+  const primeUndo = (
+    options: {
+      status?: MatchStatus;
+      playerIds?: number[];
+      playerStatuses?: PlayerStatus[];
+      committed?: number;
+      aggregates?: Map<
+        number,
+        { playCount: number; lastMatchFinishedAt: Date | null }
+      >;
+    } = {},
+  ) => {
     const playerIds = options.playerIds ?? [1, 2, 3, 4];
     const playerStatuses =
-      options.playerStatuses ??
-      playerIds.map(() => PlayerStatus.RESTING);
+      options.playerStatuses ?? playerIds.map(() => PlayerStatus.RESTING);
 
     mockPrisma.sessionMatch.findFirst.mockResolvedValue({
       id: 'match-1',
@@ -102,18 +110,18 @@ describe('SessionMatchUndoService', () => {
   it('throws when the match does not belong to the session', async () => {
     mockPrisma.sessionMatch.findFirst.mockResolvedValue(null);
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(NotFoundException);
     expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects a match that is not finished', async () => {
     primeUndo({ status: MatchStatus.PLAYING });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(BadRequestException);
     expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
     expect(matchResults.reconcilePlayers).not.toHaveBeenCalled();
   });
@@ -121,9 +129,9 @@ describe('SessionMatchUndoService', () => {
   it('rejects a second undo of the same match', async () => {
     primeUndo({ status: MatchStatus.QUEUED });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('moves the match back to the queue without touching the court', async () => {
@@ -135,7 +143,6 @@ describe('SessionMatchUndoService', () => {
       where: { id: 'match-1', status: { in: [MatchStatus.FINISHED] } },
       data: {
         status: MatchStatus.QUEUED,
-        sequence: null,
         sessionCourtId: null,
         assignedAt: null,
         startedAt: null,
@@ -211,9 +218,9 @@ describe('SessionMatchUndoService', () => {
       { id: 1, status: PlayerStatus.RESTING },
     ]);
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(ConflictException);
     expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
   });
 
@@ -223,18 +230,18 @@ describe('SessionMatchUndoService', () => {
       playerStatuses: [PlayerStatus.RESTING, PlayerStatus.LEFT],
     });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(ConflictException);
     expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects when a player is committed to another active match', async () => {
     primeUndo({ committed: 1 });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(ConflictException);
     expect(mockPrisma.sessionMatch.updateMany).not.toHaveBeenCalled();
     expect(matchResults.reconcilePlayers).not.toHaveBeenCalled();
   });
@@ -243,9 +250,9 @@ describe('SessionMatchUndoService', () => {
     primeUndo();
     mockPrisma.sessionMatch.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(ConflictException);
     expect(matchResults.reconcilePlayers).not.toHaveBeenCalled();
   });
 
@@ -253,9 +260,9 @@ describe('SessionMatchUndoService', () => {
     primeUndo();
     mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.undoFinishMatch(mockSession, 'match-1')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.undoFinishMatch(mockSession, 'match-1'),
+    ).rejects.toThrow(ConflictException);
     expect(mockPrisma.matchResult.deleteMany).not.toHaveBeenCalled();
   });
 

@@ -123,6 +123,112 @@ describe('SessionStatsService', () => {
       expect(result.meta).toEqual({ total: 0, sessionId: 'session-1' });
     });
 
+    it('shows an elapsed rest as waiting with no rest timer', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({
+          id: 1,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+        }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 1,
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        }),
+      );
+    });
+
+    it('keeps a still-running rest as resting', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({
+          id: 1,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 1,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+      );
+    });
+
+    it('treats a resting player without a rest timer as waiting', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({ id: 1, status: PlayerStatus.RESTING, restUntil: null }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 1,
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        }),
+      );
+    });
+
+    it('sorts an elapsed rest among the waiting players via status', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({ id: 1, status: PlayerStatus.LEFT }),
+        rosterPlayer({
+          id: 2,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+        }),
+        rosterPlayer({
+          id: 3,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+        rosterPlayer({ id: 4, status: PlayerStatus.PLAYING }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(ids(result.data)).toEqual([4, 3, 2, 1]);
+    });
+
+    it('sorts an elapsed rest as if the rest timer is gone', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({ id: 1, status: PlayerStatus.WAITING, restUntil: null }),
+        rosterPlayer({
+          id: 2,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+        }),
+        rosterPlayer({
+          id: 3,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T13:00:00.000Z'),
+        }),
+      ]);
+
+      const result = await service.getRoster(
+        mockSession,
+        query({ sortBy: 'restUntil', order: 'asc' }),
+        now,
+      );
+
+      expect(ids(result.data)).toEqual([3, 1, 2]);
+    });
+
     it('defaults to live players first', async () => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([
         rosterPlayer({ id: 1, status: PlayerStatus.LEFT }),

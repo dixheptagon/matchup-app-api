@@ -10,6 +10,7 @@ import {
   PLAYER_STATUS_ORDER,
   SKILL_ORDER,
 } from '../../../shared/constants/sport-sessions.constant.js';
+import { applyEffectivePlayerStatus } from '../../../shared/helpers/sport-sessions.helper.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import type { PlayerSortField, SortOrder } from '../dto/player-list-query.dto.js';
 import type { PlayerListQueryDto } from '../dto/player-list-query.dto.js';
@@ -38,16 +39,27 @@ export class SessionStatsService {
    * Roster view: every player in the session with their status, games played,
    * and rest cooldown. Sorted by `sortBy`/`order`, defaulting to live players
    * first.
+   *
+   * Elapsed rests are virtualized: the row still says RESTING in the database,
+   * but it is returned — and sorted — as WAITING, keeping this GET read-only.
    */
-  async getRoster(session: SessionContext, query: PlayerListQueryDto) {
+  async getRoster(
+    session: SessionContext,
+    query: PlayerListQueryDto,
+    now: Date = new Date(),
+  ) {
     const players = await this.prisma.sessionPlayer.findMany({
       where: { sessionId: session.id },
       include: { clubMember: true },
     });
 
+    const rows = players.map((player) =>
+      applyEffectivePlayerStatus(player, now),
+    );
+
     return {
-      data: this.sortRoster(players, query.sortBy, query.order),
-      meta: { total: players.length, sessionId: session.id },
+      data: this.sortRoster(rows, query.sortBy, query.order),
+      meta: { total: rows.length, sessionId: session.id },
     };
   }
 

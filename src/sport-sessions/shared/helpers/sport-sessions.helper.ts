@@ -55,15 +55,64 @@ export const ACTIVE_MATCH_STATUSES: MatchStatus[] = [
 /**
  * Players who may be picked for a new match: checked in, and not already
  * committed to a match that has not finished yet.
+ *
+ * Without `now` the filter is strictly physical (`WAITING` rows only) and is
+ * used by matchmaking, which promotes rested players before reserving. With
+ * `now`, an elapsed rest counts as waiting too, so read-only GETs can present
+ * the virtual state without writing.
  */
-export function buildEligiblePlayersWhere(sessionId: string) {
+export function buildEligiblePlayersWhere(sessionId: string, now?: Date) {
+  const statusFilter = now
+    ? {
+        OR: [
+          { status: PlayerStatus.WAITING },
+          {
+            status: PlayerStatus.RESTING,
+            OR: [{ restUntil: null }, { restUntil: { lte: now } }],
+          },
+        ],
+      }
+    : { status: PlayerStatus.WAITING };
+
   return {
     sessionId,
-    status: PlayerStatus.WAITING,
+    ...statusFilter,
     matchPlayers: {
       none: { match: { status: { in: ACTIVE_MATCH_STATUSES } } },
     },
   };
+}
+
+/**
+ * A rest is over when its timer is gone or has run out. Matches the `lte`
+ * comparison promoteRestedPlayers uses, so a read and a later write agree on
+ * the boundary instant.
+ */
+export function isRestElapsed(
+  restUntil: Date | null | undefined,
+  now: Date,
+): boolean {
+  return restUntil === null || restUntil === undefined ||
+    restUntil.getTime() <= now.getTime();
+}
+
+/**
+ * Presents a player's virtual status: a resting player whose cooldown has
+ * elapsed reads back as WAITING with no rest timer. The database row is left
+ * untouched, so this is safe for GET routes; physical promotion happens on the
+ * write paths that actually need a WAITING row.
+ */
+export function applyEffectivePlayerStatus<
+  T extends { status: PlayerStatus; restUntil: Date | null },
+>(player: T, now: Date): T {
+  if (
+    player.status === PlayerStatus.RESTING &&
+    isRestElapsed(player.restUntil, now)
+  ) {
+    return { ...player, status: PlayerStatus.WAITING, restUntil: null };
+  }
+
+  return player;
 }
 
 /**
@@ -86,9 +135,10 @@ export async function allocateMatchSequence(
 
 /**
  * Players resting after a match become available again once their cooldown has
- * elapsed. There is no scheduler, so the transition is driven lazily here: the
- * caller runs this at the start of a matchmaking transaction, which is the only
- * moment a rested player could otherwise be stranded in RESTING forever.
+ * elapsed. There is no scheduler, so physical writes happen lazily in the two
+ * matchmaking transactions, where a WAITING row is actually required to
+ * reserve. Read-only GETs do not promote; they present elapsed rests as
+ * waiting via applyEffectivePlayerStatus instead.
  */
 export async function promoteRestedPlayers(
   tx: Prisma.TransactionClient,

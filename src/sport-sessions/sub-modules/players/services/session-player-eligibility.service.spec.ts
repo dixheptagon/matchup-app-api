@@ -49,15 +49,30 @@ describe('SessionPlayerEligibilityService', () => {
   });
 
   describe('getEligiblePlayers', () => {
+    const NOW = new Date('2026-10-01T12:00:00.000Z');
+
     it('should query WAITING players scoped to the session', async () => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
       mockPrisma.sessionPlayer.count.mockResolvedValue(0);
 
-      await service.getEligiblePlayers(mockSession);
+      await service.getEligiblePlayers(mockSession, NOW);
 
       const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
       expect(args.where.sessionId).toBe('session-1');
-      expect(args.where.status).toBe(PlayerStatus.WAITING);
+      expect(args.where.OR[0].status).toBe(PlayerStatus.WAITING);
+    });
+
+    it('treats an elapsed rest as waiting in the query', async () => {
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(0);
+
+      await service.getEligiblePlayers(mockSession, NOW);
+
+      const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
+      expect(args.where.OR[1]).toEqual({
+        status: PlayerStatus.RESTING,
+        OR: [{ restUntil: null }, { restUntil: { lte: NOW } }],
+      });
     });
 
     it('should exclude players committed to an unfinished match', async () => {
@@ -93,6 +108,61 @@ describe('SessionPlayerEligibilityService', () => {
       const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
       expect(args.include).toEqual({ clubMember: true });
       expect(args.orderBy).toEqual([{ checkedInAt: 'asc' }, { id: 'asc' }]);
+    });
+
+    it('presents an elapsed rest as waiting without a rest timer', async () => {
+      const NOW = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        {
+          id: 9,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+          playCount: 1,
+          checkedInAt: sessionStart,
+          lastMatchFinishedAt: sessionStart,
+          clubMember: {},
+          _count: { matchPlayers: 0 },
+        },
+      ]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(1);
+
+      const result = await service.getEligiblePlayers(mockSession, NOW);
+
+      expect(result.meta.total).toBe(1);
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 9,
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        }),
+      );
+    });
+
+    it('leaves a still-running rest untouched', async () => {
+      const NOW = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        {
+          id: 9,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+          playCount: 1,
+          checkedInAt: sessionStart,
+          lastMatchFinishedAt: sessionStart,
+          clubMember: {},
+          _count: { matchPlayers: 0 },
+        },
+      ]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(1);
+
+      const result = await service.getEligiblePlayers(mockSession, NOW);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 9,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+      );
     });
 
     it('should return empty data and a zero total when nobody is waiting', async () => {

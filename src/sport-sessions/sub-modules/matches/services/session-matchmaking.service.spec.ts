@@ -406,6 +406,28 @@ describe('SessionMatchmakingService', () => {
       expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
     });
 
+    it('promotes rested players before validating the picks', async () => {
+      await service.createManualMatch(mockSession, {
+        teamA: [1, 2],
+        teamB: [3, 4],
+      });
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          sessionId: 'session-1',
+          status: PlayerStatus.RESTING,
+          OR: [{ restUntil: null }, { restUntil: { lte: expect.any(Date) } }],
+        },
+        data: { status: 'WAITING', restUntil: null },
+      });
+
+      const promotionOrder =
+        mockPrisma.sessionPlayer.updateMany.mock.invocationCallOrder[0];
+      expect(promotionOrder).toBeLessThan(
+        mockPrisma.sessionPlayer.findMany.mock.invocationCallOrder[0],
+      );
+    });
+
     it('rejects players that are not in the session', async () => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([
         { id: 1, status: PlayerStatus.WAITING },

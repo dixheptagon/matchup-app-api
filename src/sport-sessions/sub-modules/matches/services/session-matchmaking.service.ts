@@ -39,57 +39,60 @@ export class SessionMatchmakingService {
 
   async autoMatch(session: SessionContext) {
     return this.runMatchmakingTx(session.id, async (tx) => {
-        const settings = await tx.sessionSettings.findUnique({
-          where: { sessionId: session.id },
-        });
-
-        if (!settings) {
-          throw new BadRequestException('Session settings not found');
-        }
-
-        if (!settings.autoMatchMaking) {
-          throw new BadRequestException(
-            'Auto matchmaking is disabled for this session',
-          );
-        }
-
-        // Players on cooldown rejoin the pool here, because there is no
-        // scheduler to move them back once their rest has elapsed.
-        await promoteRestedPlayers(tx, session.id);
-
-        const eligible = await tx.sessionPlayer.findMany({
-          where: buildEligiblePlayersWhere(session.id),
-          include: { clubMember: true },
-        });
-
-        if (eligible.length < PLAYERS_PER_MATCH) {
-          throw new BadRequestException(
-            `At least ${PLAYERS_PER_MATCH} waiting players are required to auto-match`,
-          );
-        }
-
-        const ranked = this.playerWeighting.weight(eligible, {
-          ...session,
-          sessionSettings: settings,
-        });
-
-        const lineup = this.composition.compose(ranked, {
-          mode: settings.matchMakingMode,
-          genderPreference: settings.genderPreference,
-        });
-
-        return this.persistMatch(
-          tx,
-          session,
-          [lineup.teamA, lineup.teamB],
-          GenerateType.AUTO,
-        );
+      const settings = await tx.sessionSettings.findUnique({
+        where: { sessionId: session.id },
       });
+
+      if (!settings) {
+        throw new BadRequestException('Session settings not found');
+      }
+
+      if (!settings.autoMatchMaking) {
+        throw new BadRequestException(
+          'Auto matchmaking is disabled for this session',
+        );
+      }
+
+      // Players on cooldown rejoin the pool here, because there is no
+      // scheduler to move them back once their rest has elapsed.
+      await promoteRestedPlayers(tx, session.id);
+
+      const eligible = await tx.sessionPlayer.findMany({
+        where: buildEligiblePlayersWhere(session.id),
+        include: { clubMember: true },
+      });
+
+      if (eligible.length < PLAYERS_PER_MATCH) {
+        throw new BadRequestException(
+          `At least ${PLAYERS_PER_MATCH} waiting players are required to auto-match`,
+        );
+      }
+
+      const ranked = this.playerWeighting.weight(eligible, {
+        ...session,
+        sessionSettings: settings,
+      });
+
+      const lineup = this.composition.compose(ranked, {
+        mode: settings.matchMakingMode,
+        genderPreference: settings.genderPreference,
+      });
+
+      return this.persistMatch(
+        tx,
+        session,
+        [lineup.teamA, lineup.teamB],
+        GenerateType.AUTO,
+      );
+    });
   }
 
   async createManualMatch(session: SessionContext, dto: CreateMatchDto) {
     return this.runMatchmakingTx(session.id, async (tx) => {
+      // Reservation is guarded on the physical WAITING status, so a rest that
+      // has elapsed is promoted here before the admin's picks are validated.
       await promoteRestedPlayers(tx, session.id);
+
       await this.assertPlayersAvailable(tx, session.id, dto);
 
       return this.persistMatch(
