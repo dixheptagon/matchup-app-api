@@ -35,7 +35,6 @@ describe('SessionMatchmakingService', () => {
 
   const settings = {
     sessionId: 'session-1',
-    autoMatchMaking: true,
     matchMakingMode: MatchMakingMode.BALANCED,
     genderPreference: null,
     equalPlayPriority: 'MEDIUM',
@@ -128,18 +127,6 @@ describe('SessionMatchmakingService', () => {
   }
 
   describe('autoMatch', () => {
-    it('rejects when auto matchmaking is disabled', async () => {
-      mockPrisma.sessionSettings.findUnique.mockResolvedValue({
-        ...settings,
-        autoMatchMaking: false,
-      });
-
-      await expect(service.autoMatch(mockSession)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
-    });
-
     it('rejects when there are not enough waiting players', async () => {
       mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
       mockPrisma.sessionPlayer.findMany.mockResolvedValue(

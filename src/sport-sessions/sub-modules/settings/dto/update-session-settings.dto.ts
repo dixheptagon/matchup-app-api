@@ -58,10 +58,6 @@ export class UpdateSessionSettingsDto {
 
   // ─── MATCHMAKING ───────────────────────────────────────
   @ValidateIf(isDefined)
-  @IsBoolean({ message: 'autoMatchMaking must be a boolean' })
-  autoMatchMaking?: boolean;
-
-  @ValidateIf(isDefined)
   @IsEnum(MatchMakingMode, { message: 'matchMakingMode is invalid' })
   matchMakingMode?: MatchMakingMode;
 

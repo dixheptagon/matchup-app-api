@@ -19,7 +19,6 @@ export const DEFAULT_CLUB_SETTINGS = {
   queueDepth: 10,
 
   // MATCHMAKING
-  autoMatchMaking: true,
   matchMakingMode: MatchMakingMode.BALANCED,
   equalPlayPriority: PriorityLevel.MEDIUM,
   balancedTeams: PriorityLevel.HIGH,

@@ -39,7 +39,6 @@ describe('SportSessionsService', () => {
     leaderBoardMode: 'WINS',
     pointsToWin: 11,
     queueDepth: 5,
-    autoMatchMaking: true,
     matchMakingMode: 'BALANCED',
     equalPlayPriority: 'MEDIUM',
     balancedTeams: 'HIGH',

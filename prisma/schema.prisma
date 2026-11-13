@@ -202,7 +202,6 @@ model ClubSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  autoMatchMaking          Boolean         @default(true)
   matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)
@@ -261,7 +260,6 @@ model SessionSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  autoMatchMaking          Boolean         @default(true)
   matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)

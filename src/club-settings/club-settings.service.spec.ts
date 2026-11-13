@@ -33,7 +33,6 @@ describe('ClubSettingsService', () => {
     lateJoinerPolicy: null,
     leaderBoardMode: 'OFF',
     queueDepth: null,
-    autoMatchMaking: true,
     matchMakingMode: 'BALANCED',
     equalPlayPriority: 'MEDIUM',
     balancedTeams: 'HIGH',

@@ -47,12 +47,6 @@ export class SessionMatchmakingService {
         throw new BadRequestException('Session settings not found');
       }
 
-      if (!settings.autoMatchMaking) {
-        throw new BadRequestException(
-          'Auto matchmaking is disabled for this session',
-        );
-      }
-
       // Players on cooldown rejoin the pool here, because there is no
       // scheduler to move them back once their rest has elapsed.
       await promoteRestedPlayers(tx, session.id);
