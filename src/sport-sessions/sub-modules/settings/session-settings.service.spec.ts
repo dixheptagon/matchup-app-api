@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { SessionSettingsService } from './session-settings.service.js';
 import { PrismaService } from '../../../config/prisma/prisma.service.js';
+import { MatchmakingPreset } from '../../../club-settings/matchmaking-presets.constant.js';
 import { SessionContext } from '../../shared/types/sport-sessions.types.js';
 
 describe('SessionSettingsService', () => {
@@ -64,6 +65,53 @@ describe('SessionSettingsService', () => {
       service.updateSettings(
         { ...mockSession, status: 'ACTIVE' },
         { defaultSport: 'PADEL' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(mockPrisma.sessionSettings.update).not.toHaveBeenCalled();
+  });
+
+  it('should expand a preset into the priority fields', async () => {
+    mockPrisma.sessionSettings.update.mockResolvedValue({});
+
+    await service.updateSettings(mockSession, {
+      preset: MatchmakingPreset.SKILL_BASED,
+    });
+
+    expect(mockPrisma.sessionSettings.update).toHaveBeenCalledWith({
+      where: { sessionId: 'session-1' },
+      data: {
+        equalPlayPriority: 'MEDIUM',
+        prioritizeWaitingPlayers: 'MEDIUM',
+        balancedTeams: 'HIGH',
+        skillBandPriority: 'MAX',
+        partnerVariety: 'LOW',
+        opponentVariety: 'LOW',
+      },
+    });
+  });
+
+  it('should let explicit fields override the preset values', async () => {
+    mockPrisma.sessionSettings.update.mockResolvedValue({});
+
+    await service.updateSettings(mockSession, {
+      preset: MatchmakingPreset.RANDOM,
+      balancedTeams: 'MEDIUM',
+    });
+
+    expect(mockPrisma.sessionSettings.update).toHaveBeenCalledWith({
+      where: { sessionId: 'session-1' },
+      data: expect.objectContaining({
+        balancedTeams: 'MEDIUM',
+        skillBandPriority: 'LOW',
+      }),
+    });
+  });
+
+  it('should reject a preset while the session is active', async () => {
+    await expect(
+      service.updateSettings(
+        { ...mockSession, status: 'ACTIVE' },
+        { preset: MatchmakingPreset.BALANCED },
       ),
     ).rejects.toThrow(BadRequestException);
     expect(mockPrisma.sessionSettings.update).not.toHaveBeenCalled();

@@ -3,11 +3,11 @@ import { MatchCompositionService } from './match-composition.service.js';
 import type {
   ComposablePlayer,
   CompositionOptions,
+  CompositionWeights,
 } from './match-composition.service.js';
 import {
   GenderPreferenceType,
   GenderType,
-  MatchMakingMode,
   SkillLevel,
 } from '../../../../../prisma/generated/prisma/enums.js';
 
@@ -25,11 +25,15 @@ function player(
 }
 
 function options(
-  mode: MatchMakingMode,
+  weights: CompositionWeights,
   genderPreference: GenderPreferenceType | null = null,
 ): CompositionOptions {
-  return { mode, genderPreference };
+  return { weights, genderPreference };
 }
+
+const BALANCED: CompositionWeights = { teamBalance: 2, skillBand: 0 };
+const SKILL_BAND: CompositionWeights = { teamBalance: 2, skillBand: 4 };
+const RANDOM: CompositionWeights = { teamBalance: 0, skillBand: 0 };
 
 describe('MatchCompositionService', () => {
   let service: MatchCompositionService;
@@ -42,12 +46,12 @@ describe('MatchCompositionService', () => {
     expect(() =>
       service.compose(
         [player(1), player(2), player(3)],
-        options(MatchMakingMode.BALANCED),
+        options(BALANCED),
       ),
     ).toThrow(BadRequestException);
   });
 
-  describe('BALANCED', () => {
+  describe('team balance weighting', () => {
     it('splits teams so their strengths are as close as possible', () => {
       // 3,3,0,0 -> any split balances equally
       const lineup = service.compose(
@@ -57,7 +61,7 @@ describe('MatchCompositionService', () => {
           player(3, SkillLevel.NEWBIE),
           player(4, SkillLevel.NEWBIE),
         ],
-        options(MatchMakingMode.BALANCED),
+        options(BALANCED),
       );
 
       expect(lineup.teamA).toHaveLength(2);
@@ -73,7 +77,7 @@ describe('MatchCompositionService', () => {
           player(3, SkillLevel.NEWBIE),
           player(4, SkillLevel.NEWBIE),
         ],
-        options(MatchMakingMode.BALANCED),
+        options(BALANCED),
       );
 
       const strengths = (team: number[]) =>
@@ -98,7 +102,7 @@ describe('MatchCompositionService', () => {
         Object.entries(strengths).map(([id, skill]) =>
           player(Number(id), skill),
         ),
-        options(MatchMakingMode.BALANCED),
+        options(BALANCED),
       );
 
       // The two ADVANCE players must be split across the two teams.
@@ -109,7 +113,7 @@ describe('MatchCompositionService', () => {
     });
   });
 
-  describe('SKILL_BASED', () => {
+  describe('skill band weighting', () => {
     it('prefers a tight skill band over a lower-fairness wide group', () => {
       const lineup = service.compose(
         [
@@ -120,14 +124,38 @@ describe('MatchCompositionService', () => {
           player(5, SkillLevel.ADVANCE),
           player(6, SkillLevel.ADVANCE),
         ],
-        options(MatchMakingMode.SKILL_BASED),
+        options(SKILL_BAND),
       );
 
       expect(lineup.selected).toEqual([1, 2, 3, 4]);
     });
+
+    it('splits the tight band into balanced teams', () => {
+      const lineup = service.compose(
+        [
+          player(1, SkillLevel.ADVANCE),
+          player(2, SkillLevel.ADVANCE),
+          player(3, SkillLevel.NEWBIE),
+          player(4, SkillLevel.NEWBIE),
+          player(5, SkillLevel.BEGINNER),
+          player(6, SkillLevel.BEGINNER),
+        ],
+        options(SKILL_BAND),
+      );
+
+      // The only spread-1 group is the two NEWBIEs plus the two BEGINNERs.
+      expect([...lineup.selected].sort()).toEqual([3, 4, 5, 6]);
+      // Best split pairs one NEWBIE with one BEGINNER on each side.
+      const teamStrength = (team: number[]) =>
+        team.reduce(
+          (sum, id) => sum + (id === 3 || id === 4 ? 0 : 1),
+          0,
+        );
+      expect(teamStrength(lineup.teamA)).toBe(teamStrength(lineup.teamB));
+    });
   });
 
-  describe('RANDOM', () => {
+  describe('zero weights (skill-agnostic)', () => {
     it('ignores skill and takes the top four by fairness', () => {
       const lineup = service.compose(
         [
@@ -137,7 +165,7 @@ describe('MatchCompositionService', () => {
           player(4, SkillLevel.NEWBIE),
           player(5, SkillLevel.ADVANCE),
         ],
-        options(MatchMakingMode.RANDOM),
+        options(RANDOM),
       );
 
       expect(lineup.selected).toEqual([1, 2, 3, 4]);
@@ -157,7 +185,7 @@ describe('MatchCompositionService', () => {
           player(5, SkillLevel.BEGINNER, GenderType.MALE),
           player(6, SkillLevel.BEGINNER, GenderType.MALE),
         ],
-        options(MatchMakingMode.BALANCED, GenderPreferenceType.PREFER_MIXED),
+        options(BALANCED, GenderPreferenceType.PREFER_MIXED),
       );
 
       for (const team of [mixed.teamA, mixed.teamB]) {
@@ -176,10 +204,7 @@ describe('MatchCompositionService', () => {
           player(3, SkillLevel.BEGINNER, GenderType.MALE),
           player(4, SkillLevel.BEGINNER, GenderType.MALE),
         ],
-        options(
-          MatchMakingMode.BALANCED,
-          GenderPreferenceType.PREFER_SAME_GENDER,
-        ),
+        options(BALANCED, GenderPreferenceType.PREFER_SAME_GENDER),
       );
 
       expect(lineup.teamA).toHaveLength(2);
@@ -194,10 +219,7 @@ describe('MatchCompositionService', () => {
           player(3, SkillLevel.BEGINNER, GenderType.MALE),
           player(4, SkillLevel.BEGINNER, GenderType.MALE),
         ],
-        options(
-          MatchMakingMode.BALANCED,
-          GenderPreferenceType.PREFER_MIXED,
-        ),
+        options(BALANCED, GenderPreferenceType.PREFER_MIXED),
       );
 
       expect(lineup.teamA).toHaveLength(2);
@@ -212,7 +234,7 @@ describe('MatchCompositionService', () => {
           player(3, SkillLevel.BEGINNER, GenderType.MALE),
           player(4, SkillLevel.BEGINNER, GenderType.MALE),
         ],
-        options(MatchMakingMode.BALANCED, GenderPreferenceType.OFF),
+        options(BALANCED, GenderPreferenceType.OFF),
       );
 
       expect(lineup.selected).toEqual([1, 2, 3, 4]);
@@ -228,8 +250,8 @@ describe('MatchCompositionService', () => {
       player(5, SkillLevel.INTERMEDIATE),
     ];
 
-    const first = service.compose(pool, options(MatchMakingMode.BALANCED));
-    const second = service.compose(pool, options(MatchMakingMode.BALANCED));
+    const first = service.compose(pool, options(BALANCED));
+    const second = service.compose(pool, options(BALANCED));
 
     expect(first).toEqual(second);
   });
@@ -239,7 +261,7 @@ describe('MatchCompositionService', () => {
       player(index + 1, SkillLevel.BEGINNER),
     );
 
-    const lineup = service.compose(pool, options(MatchMakingMode.BALANCED));
+    const lineup = service.compose(pool, options(BALANCED));
 
     for (const id of lineup.selected) {
       expect(pool.find((p) => p.id === id)!.fairness.total).toBe(1);

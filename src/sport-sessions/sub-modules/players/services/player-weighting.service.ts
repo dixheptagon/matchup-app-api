@@ -3,9 +3,9 @@ import type { SessionPlayer } from '../../../../../prisma/generated/prisma/clien
 import { LateJoinerPolicy } from '../../../../../prisma/generated/prisma/enums.js';
 import { DEFAULT_CLUB_SETTINGS } from '../../../../club-settings/club-settings.constant.js';
 import {
+  COMPOSITION_WEIGHTS,
   LATE_JOINER_CATCHUP_BONUS,
   MIN_SESSION_PLAY_COUNT,
-  PRIORITY_WEIGHTS,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type {
   SessionContext,
@@ -48,8 +48,8 @@ export class PlayerWeightingService {
     const settings = this.resolveSettings(session);
     const policy = settings.lateJoinerPolicy;
     const weights = {
-      equalPlay: PRIORITY_WEIGHTS[settings.equalPlayPriority],
-      waitingTime: PRIORITY_WEIGHTS[settings.prioritizeWaitingPlayers],
+      equalPlay: COMPOSITION_WEIGHTS[settings.equalPlayPriority],
+      waitingTime: COMPOSITION_WEIGHTS[settings.prioritizeWaitingPlayers],
     };
 
     const rawCounts = players.map((player) => player.playCount ?? 0);

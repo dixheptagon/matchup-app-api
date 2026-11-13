@@ -11,7 +11,6 @@ import { PlayerWeightingService } from '../../players/services/player-weighting.
 import { MATCHMAKING_LOCK_NAMESPACE } from '../../../shared/constants/sport-sessions.constant.js';
 import {
   GenerateType,
-  MatchMakingMode,
   MatchStatus,
   PlayerStatus,
   SkillLevel,
@@ -35,9 +34,10 @@ describe('SessionMatchmakingService', () => {
 
   const settings = {
     sessionId: 'session-1',
-    matchMakingMode: MatchMakingMode.BALANCED,
     genderPreference: null,
     equalPlayPriority: 'MEDIUM',
+    balancedTeams: 'HIGH',
+    skillBandPriority: 'LOW',
     prioritizeWaitingPlayers: 'HIGH',
     lateJoinerPolicy: 'EQUAL_PLAY_CATCHUP',
     fairnessThreshold: 10,
@@ -169,7 +169,7 @@ describe('SessionMatchmakingService', () => {
       await service.autoMatch(mockSession);
 
       expect(composition.compose).toHaveBeenCalledWith(expect.any(Array), {
-        mode: MatchMakingMode.BALANCED,
+        weights: { teamBalance: 2, skillBand: 0 },
         genderPreference: null,
       });
     });

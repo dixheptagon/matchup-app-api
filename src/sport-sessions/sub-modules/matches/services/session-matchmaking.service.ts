@@ -20,6 +20,7 @@ import {
 import {
   MATCH_DETAIL_INCLUDE,
   MATCHMAKING_LOCK_NAMESPACE,
+  COMPOSITION_WEIGHTS,
   PLAYERS_PER_MATCH,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
@@ -68,7 +69,10 @@ export class SessionMatchmakingService {
       });
 
       const lineup = this.composition.compose(ranked, {
-        mode: settings.matchMakingMode,
+        weights: {
+          teamBalance: COMPOSITION_WEIGHTS[settings.balancedTeams],
+          skillBand: COMPOSITION_WEIGHTS[settings.skillBandPriority],
+        },
         genderPreference: settings.genderPreference,
       });
 

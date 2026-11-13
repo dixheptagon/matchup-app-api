@@ -147,10 +147,15 @@ export const SKILL_ORDER: Record<SkillLevel, number> = {
 
 // ─── Fairness weighting ──────────────────────────────────
 
-export const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
-  LOW: 1,
-  MEDIUM: 2,
-  HIGH: 3,
+/**
+ * Weights for match composition, resolved from the priority settings.
+ * LOW means the objective is switched off (weight 0), which is what lets a
+ * skill-agnostic configuration exist without an extra enum value.
+ */
+export const COMPOSITION_WEIGHTS: Record<PriorityLevel, number> = {
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
   MAX: 4,
 };
 

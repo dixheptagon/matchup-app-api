@@ -10,11 +10,11 @@ import {
 import {
   GenderPreferenceType,
   LateJoinerPolicy,
-MatchMakingMode,
   PriorityLevel,
   ScoringType,
   SportType,
 } from '../../../../../prisma/generated/prisma/enums.js';
+import { MatchmakingPreset } from '../../../../club-settings/matchmaking-presets.constant.js';
 
 const isDefined = (_: unknown, value: unknown) => value !== undefined;
 
@@ -57,9 +57,13 @@ export class UpdateSessionSettingsDto {
   queueDepth?: number | null;
 
   // ─── MATCHMAKING ───────────────────────────────────────
+  /**
+   * Write-time template that expands into the priority fields below; never
+   * persisted. Explicit fields sent alongside it win over the preset values.
+   */
   @ValidateIf(isDefined)
-  @IsEnum(MatchMakingMode, { message: 'matchMakingMode is invalid' })
-  matchMakingMode?: MatchMakingMode;
+  @IsEnum(MatchmakingPreset, { message: 'preset is invalid' })
+  preset?: MatchmakingPreset;
 
   @ValidateIf(isDefined)
   @IsEnum(PriorityLevel, { message: 'equalPlayPriority is invalid' })
@@ -68,6 +72,10 @@ export class UpdateSessionSettingsDto {
   @ValidateIf(isDefined)
   @IsEnum(PriorityLevel, { message: 'balancedTeams is invalid' })
   balancedTeams?: PriorityLevel;
+
+  @ValidateIf(isDefined)
+  @IsEnum(PriorityLevel, { message: 'skillBandPriority is invalid' })
+  skillBandPriority?: PriorityLevel;
 
   @ValidateIf(isDefined)
   @IsEnum(PriorityLevel, { message: 'partnerVariety is invalid' })

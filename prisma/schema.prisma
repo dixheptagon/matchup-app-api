@@ -47,12 +47,6 @@ enum GenderPreferenceType {
   PREFER_SAME_GENDER
 }
 
-enum MatchMakingMode {
-  BALANCED
-  RANDOM
-  SKILL_BASED
-}
-
 enum LateJoinerPolicy {
   EQUAL_PLAY_CATCHUP
   SESSION_AVERAGE
@@ -202,9 +196,9 @@ model ClubSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)
+  skillBandPriority        PriorityLevel   @default(LOW)
   partnerVariety           PriorityLevel   @default(MEDIUM)
   opponentVariety          PriorityLevel   @default(MEDIUM)
   prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
@@ -260,9 +254,9 @@ model SessionSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  matchMakingMode          MatchMakingMode @default(BALANCED)
   equalPlayPriority        PriorityLevel   @default(MEDIUM)
   balancedTeams            PriorityLevel   @default(HIGH)
+  skillBandPriority        PriorityLevel   @default(LOW)
   partnerVariety           PriorityLevel   @default(MEDIUM)
   opponentVariety          PriorityLevel   @default(MEDIUM)
   prioritizeWaitingPlayers PriorityLevel   @default(HIGH)

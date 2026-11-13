@@ -2,7 +2,6 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import {
   GenderPreferenceType,
   GenderType,
-  MatchMakingMode,
   SkillLevel,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import {
@@ -20,8 +19,18 @@ export interface ComposablePlayer {
   fairness: { total: number };
 }
 
+export interface CompositionWeights {
+  /** Penalty per point of total-strength difference between the two teams. */
+  teamBalance: number;
+  /**
+   * When non-zero, subset selection optimises skill homogeneity instead of
+   * team balance; team splitting keeps using the balance weight.
+   */
+  skillBand: number;
+}
+
 export interface CompositionOptions {
-  mode: MatchMakingMode;
+  weights: CompositionWeights;
   genderPreference: GenderPreferenceType | null;
 }
 
@@ -32,7 +41,10 @@ export interface ComposedLineup {
   selected: number[];
 }
 
-/** The three distinct 2v2 splits of a 4-element set. */
+/**
+ * The three distinct 2v2 splits of a 4-element set, in the order used to break
+ * equal-balance ties.
+ */
 const PARTITIONS: ReadonlyArray<[number, number, number, number]> = [
   [0, 1, 2, 3],
   [0, 2, 1, 3],
@@ -54,12 +66,9 @@ export class MatchCompositionService {
     // Fairness gate: only the highest-ranked players are ever considered.
     const window = players.slice(0, SELECTION_WINDOW);
 
-    const chosen =
-      options.mode === MatchMakingMode.RANDOM
-        ? window.slice(0, PLAYERS_PER_MATCH)
-        : this.selectBestSubset(window, options);
+    const chosen = this.selectBestSubset(window, options);
 
-    const [teamA, teamB] = this.splitTeams(chosen, options.mode);
+    const [teamA, teamB] = this.splitTeams(chosen, options);
 
     return {
       teamA: teamA.map((player) => player.id),
@@ -81,11 +90,9 @@ export class MatchCompositionService {
 
     for (const ranks of combinations(window.length, PLAYERS_PER_MATCH)) {
       const group = ranks.map((rank) => window[rank]);
-      const [teamA, teamB] = this.splitTeams(group, options.mode);
+      const [teamA, teamB] = this.splitTeams(group, options);
 
-      const quality =
-        this.scoreSkillFit(group, teamA, teamB, options.mode) +
-        this.scoreGenderBonus(teamA, teamB, options);
+      const quality = this.scoreSubset(group, teamA, teamB, options);
       const fairnessSum = group.reduce(
         (sum, player) => sum + player.fairness.total,
         0,
@@ -107,20 +114,28 @@ export class MatchCompositionService {
     return best!.group;
   }
 
-  private scoreSkillFit(
+  /**
+   * Subset quality. With a skill-band weight the group's skill spread is the
+   * objective; otherwise the balance of the teams it can be split into wins.
+   */
+  private scoreSubset(
     group: ComposablePlayer[],
     teamA: ComposablePlayer[],
     teamB: ComposablePlayer[],
-    mode: MatchMakingMode,
+    options: CompositionOptions,
   ): number {
-    if (mode === MatchMakingMode.SKILL_BASED) {
-      const skills = group.map((player) =>
-        skillValue(player.clubMember.skillLevel),
-      );
-      return -(Math.max(...skills) - Math.min(...skills));
-    }
+    const { weights } = options;
 
-    return -Math.abs(teamStrength(teamA) - teamStrength(teamB));
+    const balancePenalty =
+      weights.teamBalance *
+      Math.abs(teamStrength(teamA) - teamStrength(teamB));
+
+    const quality =
+      weights.skillBand > 0
+        ? -weights.skillBand * skillSpread(group)
+        : -balancePenalty;
+
+    return quality + this.scoreGenderBonus(teamA, teamB, options);
   }
 
   private scoreGenderBonus(
@@ -147,10 +162,11 @@ export class MatchCompositionService {
 
   private splitTeams(
     group: ComposablePlayer[],
-    mode: MatchMakingMode,
+    options: CompositionOptions,
   ): [ComposablePlayer[], ComposablePlayer[]] {
-    if (mode === MatchMakingMode.RANDOM) {
-      // Deterministic, skill-agnostic split of the fairness order.
+    // Without a balance objective there is nothing to minimise, so the split
+    // stays skill-agnostic: fairness rank 0 pairs with rank 2, 1 with 3.
+    if (options.weights.teamBalance === 0) {
       return [
         [group[0], group[2]],
         [group[1], group[3]],
@@ -166,7 +182,9 @@ export class MatchCompositionService {
     for (const [i0, i1, i2, i3] of PARTITIONS) {
       const a = [group[i0], group[i1]];
       const b = [group[i2], group[i3]];
-      const diff = Math.abs(teamStrength(a) - teamStrength(b));
+      const diff =
+        options.weights.teamBalance *
+        Math.abs(teamStrength(a) - teamStrength(b));
 
       if (best === null || diff < best.diff) {
         best = { a, b, diff };
@@ -182,6 +200,13 @@ function teamStrength(team: ComposablePlayer[]): number {
     (sum, player) => sum + skillValue(player.clubMember.skillLevel),
     0,
   );
+}
+
+function skillSpread(group: ComposablePlayer[]): number {
+  const skills = group.map((player) =>
+    skillValue(player.clubMember.skillLevel),
+  );
+  return Math.max(...skills) - Math.min(...skills);
 }
 
 function skillValue(skillLevel: SkillLevel): number {

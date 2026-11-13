@@ -2,7 +2,6 @@ import {
   SportType,
   LateJoinerPolicy,
   ScoringType,
-  MatchMakingMode,
   PriorityLevel,
   GenderPreferenceType,
 } from '../../prisma/generated/prisma/enums.js';
@@ -19,9 +18,9 @@ export const DEFAULT_CLUB_SETTINGS = {
   queueDepth: 10,
 
   // MATCHMAKING
-  matchMakingMode: MatchMakingMode.BALANCED,
   equalPlayPriority: PriorityLevel.MEDIUM,
   balancedTeams: PriorityLevel.HIGH,
+  skillBandPriority: PriorityLevel.LOW,
   partnerVariety: PriorityLevel.MEDIUM,
   opponentVariety: PriorityLevel.MEDIUM,
   prioritizeWaitingPlayers: PriorityLevel.HIGH,

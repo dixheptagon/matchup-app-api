@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ClubSettingsService } from './club-settings.service.js';
 import { PrismaService } from '../config/prisma/prisma.service.js';
+import { MatchmakingPreset } from './matchmaking-presets.constant.js';
 import type { SportClub } from '../../prisma/generated/prisma/client.js';
 
 describe('ClubSettingsService', () => {
@@ -33,9 +34,9 @@ describe('ClubSettingsService', () => {
     lateJoinerPolicy: null,
     leaderBoardMode: 'OFF',
     queueDepth: null,
-    matchMakingMode: 'BALANCED',
     equalPlayPriority: 'MEDIUM',
     balancedTeams: 'HIGH',
+    skillBandPriority: 'LOW',
     partnerVariety: 'MEDIUM',
     opponentVariety: 'MEDIUM',
     prioritizeWaitingPlayers: 'HIGH',
@@ -137,19 +138,77 @@ describe('ClubSettingsService', () => {
       mockPrisma.clubSettings.findUnique.mockResolvedValue({ id: 1 });
       mockPrisma.clubSettings.update.mockResolvedValue({
         ...mockSettings,
-        matchMakingMode: 'RANDOM',
+        balancedTeams: 'MEDIUM',
       });
 
       const result = await service.upsert(mockClub, {
-        matchMakingMode: 'RANDOM',
+        balancedTeams: 'MEDIUM',
       });
 
-      expect(result.matchMakingMode).toBe('RANDOM');
+      expect(result.balancedTeams).toBe('MEDIUM');
       expect(mockPrisma.clubSettings.update).toHaveBeenCalledWith({
         where: { clubId: 'club-1' },
-        data: { matchMakingMode: 'RANDOM' },
+        data: { balancedTeams: 'MEDIUM' },
       });
       expect(mockPrisma.clubSettings.create).not.toHaveBeenCalled();
+    });
+
+    it('should expand a preset into the priority fields', async () => {
+      mockPrisma.clubSettings.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.clubSettings.update.mockResolvedValue(mockSettings);
+
+      await service.upsert(mockClub, { preset: MatchmakingPreset.RANDOM });
+
+      expect(mockPrisma.clubSettings.update).toHaveBeenCalledWith({
+        where: { clubId: 'club-1' },
+        data: {
+          equalPlayPriority: 'MAX',
+          prioritizeWaitingPlayers: 'MAX',
+          balancedTeams: 'LOW',
+          skillBandPriority: 'LOW',
+          partnerVariety: 'LOW',
+          opponentVariety: 'LOW',
+        },
+      });
+    });
+
+    it('should let explicit fields override the preset values', async () => {
+      mockPrisma.clubSettings.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.clubSettings.update.mockResolvedValue(mockSettings);
+
+      await service.upsert(mockClub, {
+        preset: MatchmakingPreset.SKILL_BASED,
+        balancedTeams: 'MAX',
+      });
+
+      expect(mockPrisma.clubSettings.update).toHaveBeenCalledWith({
+        where: { clubId: 'club-1' },
+        data: expect.objectContaining({
+          skillBandPriority: 'MAX',
+          balancedTeams: 'MAX',
+        }),
+      });
+    });
+
+    it('should expand a preset when creating settings', async () => {
+      mockPrisma.clubSettings.findUnique.mockResolvedValue(null);
+      mockPrisma.clubSettings.create.mockResolvedValue(mockSettings);
+
+      await service.upsert(mockClub, {
+        preset: MatchmakingPreset.BALANCED,
+        defaultSport: 'BADMINTON',
+        leaderBoardMode: 'OFF',
+      });
+
+      expect(mockPrisma.clubSettings.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          clubId: 'club-1',
+          defaultSport: 'BADMINTON',
+          leaderBoardMode: 'OFF',
+          balancedTeams: 'HIGH',
+          skillBandPriority: 'LOW',
+        }),
+      });
     });
 
     it('should not require defaultSport and leaderBoardMode on update', async () => {
