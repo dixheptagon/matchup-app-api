@@ -16,7 +16,7 @@ export interface ComposablePlayer {
     skillLevel: SkillLevel;
     gender: GenderType | null;
   };
-  fairness: { total: number };
+  fairness: { total: number; tier?: number };
 }
 
 export interface CompositionWeights {
@@ -84,6 +84,7 @@ export class MatchCompositionService {
     let best: {
       group: ComposablePlayer[];
       quality: number;
+      fallbackCount: number;
       fairnessSum: number;
       ranks: number[];
     } | null = null;
@@ -93,6 +94,11 @@ export class MatchCompositionService {
       const [teamA, teamB] = this.splitTeams(group, options);
 
       const quality = this.scoreSubset(group, teamA, teamB, options);
+      // Strict tier-first rule: a lineup with fewer resting fallback players
+      // beats any lineup with more, no matter how lopsided its quality.
+      const fallbackCount = group.filter(
+        (player) => (player.fairness.tier ?? 0) === 1,
+      ).length;
       const fairnessSum = group.reduce(
         (sum, player) => sum + player.fairness.total,
         0,
@@ -100,14 +106,19 @@ export class MatchCompositionService {
 
       const isBetter =
         best === null ||
-        quality > best.quality ||
-        (quality === best.quality && fairnessSum > best.fairnessSum) ||
-        (quality === best.quality &&
+        fallbackCount < best.fallbackCount ||
+        (fallbackCount === best.fallbackCount &&
+          quality > best.quality) ||
+        (fallbackCount === best.fallbackCount &&
+          quality === best.quality &&
+          fairnessSum > best.fairnessSum) ||
+        (fallbackCount === best.fallbackCount &&
+          quality === best.quality &&
           fairnessSum === best.fairnessSum &&
           compareRanks(ranks, best.ranks) < 0);
 
       if (isBetter) {
-        best = { group, quality, fairnessSum, ranks };
+        best = { group, quality, fallbackCount, fairnessSum, ranks };
       }
     }
 

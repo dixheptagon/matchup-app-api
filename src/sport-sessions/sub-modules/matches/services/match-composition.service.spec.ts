@@ -256,6 +256,54 @@ describe('MatchCompositionService', () => {
     expect(first).toEqual(second);
   });
 
+  describe('fallback tiers', () => {
+    function tieredPlayer(
+      id: number,
+      tier: number,
+      skillLevel: SkillLevel = SkillLevel.NEWBIE,
+      total = 1,
+    ): ComposablePlayer {
+      return {
+        id,
+        clubMember: { skillLevel, gender: null },
+        fairness: { total, tier },
+      };
+    }
+
+    it('prefers fewer fallback players over better-balanced teams', () => {
+      // Three waiting NEWBIEs and three resting ADVANCEs. A 2-waiting +
+      // 2-resting lineup splits perfectly balanced, but a 3-waiting + 1-resting
+      // lineup must still win because it carries fewer fallback players.
+      const pool = [
+        tieredPlayer(1, 0, SkillLevel.NEWBIE, 10),
+        tieredPlayer(2, 0, SkillLevel.NEWBIE, 9),
+        tieredPlayer(3, 0, SkillLevel.NEWBIE, 8),
+        tieredPlayer(4, 1, SkillLevel.ADVANCE, 3),
+        tieredPlayer(5, 1, SkillLevel.ADVANCE, 2),
+        tieredPlayer(6, 1, SkillLevel.ADVANCE, 1),
+      ];
+
+      const lineup = service.compose(pool, options(BALANCED));
+
+      expect([...lineup.teamA, ...lineup.teamB].sort()).toEqual([1, 2, 3, 4]);
+    });
+
+    it('picks the highest-ranked fallback when only one is needed', () => {
+      const pool = [
+        tieredPlayer(1, 0, SkillLevel.NEWBIE, 10),
+        tieredPlayer(2, 0, SkillLevel.NEWBIE, 9),
+        tieredPlayer(3, 0, SkillLevel.NEWBIE, 8),
+        tieredPlayer(4, 1, SkillLevel.NEWBIE, 3),
+        tieredPlayer(5, 1, SkillLevel.NEWBIE, 2),
+        tieredPlayer(6, 1, SkillLevel.NEWBIE, 1),
+      ];
+
+      const lineup = service.compose(pool, options(BALANCED));
+
+      expect(lineup.selected).toEqual([1, 2, 3, 4]);
+    });
+  });
+
   it('only considers the top of the fairness window', () => {
     const pool = Array.from({ length: 20 }, (_, index) =>
       player(index + 1, SkillLevel.BEGINNER),

@@ -11,6 +11,7 @@ import { DEFAULT_CLUB_SETTINGS } from '../../../../club-settings/club-settings.c
 import {
   MILLISECONDS_PER_MINUTE,
   RESTABLE_PLAYER_STATUSES,
+  RESUMABLE_PLAYER_STATUSES,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 
@@ -43,6 +44,13 @@ describe('SessionPlayerRestService', () => {
     id: 3,
     status: PlayerStatus.RESTING,
     restUntil: new Date('2026-01-01T00:03:00.000Z'),
+  };
+
+  const broken = {
+    ...waiting,
+    id: 4,
+    status: PlayerStatus.BREAK,
+    restUntil: null,
   };
 
   function restUntil(call = 0) {
@@ -110,7 +118,7 @@ describe('SessionPlayerRestService', () => {
       expect(mockPrisma.sessionPlayer.updateMany).not.toHaveBeenCalled();
     });
 
-    it('puts a waiting player on rest until the configured time', async () => {
+    it('puts a waiting player on a timed break until the configured time', async () => {
       mockPrisma.sessionPlayer.findFirst.mockResolvedValue(waiting);
 
       await service.restPlayer(mockSession, 2, {});
@@ -122,7 +130,7 @@ describe('SessionPlayerRestService', () => {
           status: { in: RESTABLE_PLAYER_STATUSES },
         },
         data: {
-          status: PlayerStatus.RESTING,
+          status: PlayerStatus.BREAK,
           restUntil: new Date('2026-01-01T00:05:00.000Z'),
         },
       });
@@ -143,7 +151,38 @@ describe('SessionPlayerRestService', () => {
       expect(mockPrisma.sessionSettings.findUnique).not.toHaveBeenCalled();
     });
 
-    it('extends the rest of an already resting player', async () => {
+    it('puts a waiting player on an indefinite break', async () => {
+      mockPrisma.sessionPlayer.findFirst.mockResolvedValue(waiting);
+
+      await service.restPlayer(mockSession, 2, { indefinite: true });
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 2,
+          sessionId: 'session-1',
+          status: { in: RESTABLE_PLAYER_STATUSES },
+        },
+        data: {
+          status: PlayerStatus.BREAK,
+          restUntil: null,
+        },
+      });
+      expect(mockPrisma.sessionSettings.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('prefers indefinite over durationMinutes', async () => {
+      mockPrisma.sessionPlayer.findFirst.mockResolvedValue(waiting);
+
+      await service.restPlayer(mockSession, 2, {
+        indefinite: true,
+        durationMinutes: 30,
+      });
+
+      expect(restUntil()).toBeNull();
+      expect(mockPrisma.sessionSettings.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('extends the rest of an already resting player as a break', async () => {
       mockPrisma.sessionPlayer.findFirst.mockResolvedValue(resting);
 
       await service.restPlayer(mockSession, 3, {});
@@ -155,8 +194,29 @@ describe('SessionPlayerRestService', () => {
           status: { in: RESTABLE_PLAYER_STATUSES },
         },
         data: {
-          status: PlayerStatus.RESTING,
+          status: PlayerStatus.BREAK,
           restUntil: new Date('2026-01-01T00:08:00.000Z'),
+        },
+      });
+    });
+
+    it('extends the break of an already broken player', async () => {
+      mockPrisma.sessionPlayer.findFirst.mockResolvedValue({
+        ...broken,
+        restUntil: new Date('2026-01-01T00:02:00.000Z'),
+      });
+
+      await service.restPlayer(mockSession, 4, { durationMinutes: 10 });
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 4,
+          sessionId: 'session-1',
+          status: { in: RESTABLE_PLAYER_STATUSES },
+        },
+        data: {
+          status: PlayerStatus.BREAK,
+          restUntil: new Date('2026-01-01T00:12:00.000Z'),
         },
       });
     });
@@ -197,14 +257,14 @@ describe('SessionPlayerRestService', () => {
       expect(mockPrisma.sessionPlayer.findUnique).not.toHaveBeenCalled();
     });
 
-    it('returns the resting player with their club member', async () => {
+    it('returns the broken player with their club member', async () => {
       mockPrisma.sessionPlayer.findFirst.mockResolvedValue(waiting);
-      const restingPlayer = { ...waiting, status: PlayerStatus.RESTING };
-      mockPrisma.sessionPlayer.findUnique.mockResolvedValue(restingPlayer);
+      const brokenPlayer = { ...waiting, status: PlayerStatus.BREAK };
+      mockPrisma.sessionPlayer.findUnique.mockResolvedValue(brokenPlayer);
 
       const result = await service.restPlayer(mockSession, 2, {});
 
-      expect(result).toEqual(restingPlayer);
+      expect(result).toEqual(brokenPlayer);
       expect(mockPrisma.sessionPlayer.findUnique).toHaveBeenCalledWith({
         where: { id: 2 },
         include: { clubMember: true },
@@ -259,7 +319,22 @@ describe('SessionPlayerRestService', () => {
         where: {
           id: 3,
           sessionId: 'session-1',
-          status: PlayerStatus.RESTING,
+          status: { in: RESUMABLE_PLAYER_STATUSES },
+        },
+        data: { status: PlayerStatus.WAITING, restUntil: null },
+      });
+    });
+
+    it('returns an indefinite break to waiting', async () => {
+      mockPrisma.sessionPlayer.findFirst.mockResolvedValue(broken);
+
+      await service.resumePlayer(mockSession, 4);
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 4,
+          sessionId: 'session-1',
+          status: { in: RESUMABLE_PLAYER_STATUSES },
         },
         data: { status: PlayerStatus.WAITING, restUntil: null },
       });

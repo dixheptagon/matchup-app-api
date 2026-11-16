@@ -61,10 +61,17 @@ export const RELEASABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.PLAYING,
 ];
 
-/** Players that may be put on rest manually (waiting, or already resting). */
+/** Players that may be put on rest manually (waiting, resting, or on break). */
 export const RESTABLE_PLAYER_STATUSES: PlayerStatus[] = [
   PlayerStatus.WAITING,
   PlayerStatus.RESTING,
+  PlayerStatus.BREAK,
+];
+
+/** Players an admin may return to the waiting pool by resuming them. */
+export const RESUMABLE_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.RESTING,
+  PlayerStatus.BREAK,
 ];
 
 /**
@@ -132,9 +139,10 @@ export const PLAYER_STATUS_ORDER: Record<PlayerStatus, number> = {
   PLAYING: 0,
   RESERVED: 1,
   RESTING: 2,
-  WAITING: 3,
-  NOT_ARRIVED: 4,
-  LEFT: 5,
+  BREAK: 3,
+  WAITING: 4,
+  NOT_ARRIVED: 5,
+  LEFT: 6,
 };
 
 /** Ascending skill order for the roster sort: NEWBIE -> ADVANCE. */
@@ -159,7 +167,27 @@ export const COMPOSITION_WEIGHTS: Record<PriorityLevel, number> = {
   MAX: 4,
 };
 
+/**
+ * Weights for fairness scoring, resolved from the same priority settings.
+ * Unlike composition, LOW never switches a signal off — every priority level
+ * still pulls, just with increasing strength.
+ */
+export const PRIORITY_WEIGHTS: Record<PriorityLevel, number> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+  MAX: 4,
+};
+
 export const LATE_JOINER_CATCHUP_BONUS = 1.5;
+
+/**
+ * Flat penalty for a RESTING player drawn from the fallback pool. Auto
+ * matchmaking only dips into cooldown players when fewer than four are waiting,
+ * and a -1000 total dominates the maximum possible four-player fairness sum, so
+ * waiting players always outrank resting ones regardless of play counts.
+ */
+export const REST_FALLBACK_PENALTY = -1000;
 
 // Games a player must complete before their play count is considered
 // meaningful under LateJoinerPolicy.MIN_SESSION_PLAY.

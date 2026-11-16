@@ -2,6 +2,7 @@ import { PlayerWeightingService } from './player-weighting.service.js';
 import type { WeightablePlayer } from './player-weighting.service.js';
 import {
   LateJoinerPolicy,
+  PlayerStatus,
   PriorityLevel,
 } from '../../../../../prisma/generated/prisma/enums.js';
 import type {
@@ -391,6 +392,69 @@ describe('PlayerWeightingService', () => {
       expect(ranked[0].fairness.bucket).toBeGreaterThan(
         ranked[1].fairness.bucket,
       );
+    });
+  });
+
+  describe('resting fallback tiers', () => {
+    it('ranks a resting player below every waiting player', () => {
+      const ranked = service.weight(
+        [
+          player({ id: 1, playCount: 10, status: PlayerStatus.WAITING }),
+          player({ id: 2, playCount: 0, status: PlayerStatus.RESTING }),
+        ],
+        session(),
+        NOW,
+      );
+
+      expect(ranked.map((p) => p.id)).toEqual([1, 2]);
+      expect(ranked[0].fairness.tier).toBe(0);
+      expect(ranked[1].fairness.tier).toBe(1);
+      expect(ranked[1].fairness.total).toBeLessThan(0);
+    });
+
+    it('still orders resting players among themselves by fairness', () => {
+      const ranked = service.weight(
+        [
+          player({ id: 1, playCount: 5, status: PlayerStatus.RESTING }),
+          player({ id: 2, playCount: 0, status: PlayerStatus.RESTING }),
+        ],
+        session(),
+        NOW,
+      );
+
+      expect(ranked.map((p) => p.id)).toEqual([2, 1]);
+      expect(ranked.map((p) => p.fairness.tier)).toEqual([1, 1]);
+    });
+
+    it('computes waiting buckets independently of the resting range', () => {
+      const ranked = service.weight(
+        [
+          player({ id: 1, playCount: 0, status: PlayerStatus.WAITING }),
+          player({ id: 2, playCount: 10, status: PlayerStatus.WAITING }),
+          player({ id: 3, playCount: 0, status: PlayerStatus.RESTING }),
+          player({ id: 4, playCount: 100, status: PlayerStatus.RESTING }),
+        ],
+        session(),
+        NOW,
+      );
+
+      expect(ranked.map((p) => p.id)).toEqual([1, 2, 3, 4]);
+      expect(ranked[0].fairness.bucket).toBeGreaterThan(
+        ranked[1].fairness.bucket,
+      );
+    });
+
+    it('treats every non-resting status as the primary tier', () => {
+      const ranked = service.weight(
+        [
+          player({ id: 1, status: PlayerStatus.WAITING }),
+          player({ id: 2, status: PlayerStatus.BREAK }),
+        ],
+        session(),
+        NOW,
+      );
+
+      expect(ranked.map((p) => p.fairness.tier)).toEqual([0, 0]);
     });
   });
 

@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import type { ClubSettings, Prisma } from '../../../../prisma/generated/prisma/client.js';
+import type {
+  ClubSettings,
+  Prisma,
+} from '../../../../prisma/generated/prisma/client.js';
 import {
   MatchStatus,
   PlayerStatus,
@@ -59,7 +62,8 @@ export const ACTIVE_MATCH_STATUSES: MatchStatus[] = [
  * Without `now` the filter is strictly physical (`WAITING` rows only) and is
  * used by matchmaking, which promotes rested players before reserving. With
  * `now`, an elapsed rest counts as waiting too, so read-only GETs can present
- * the virtual state without writing.
+ * the virtual state without writing. A `BREAK` counts as waiting only when its
+ * rest timer has elapsed — an indefinite break never expires on its own.
  */
 export function buildEligiblePlayersWhere(sessionId: string, now?: Date) {
   const statusFilter = now
@@ -69,6 +73,10 @@ export function buildEligiblePlayersWhere(sessionId: string, now?: Date) {
           {
             status: PlayerStatus.RESTING,
             OR: [{ restUntil: null }, { restUntil: { lte: now } }],
+          },
+          {
+            status: PlayerStatus.BREAK,
+            restUntil: { not: null, lte: now },
           },
         ],
       }
@@ -84,6 +92,22 @@ export function buildEligiblePlayersWhere(sessionId: string, now?: Date) {
 }
 
 /**
+ * Cooldown players eligible for the auto-matchmaking fallback pool: they are
+ * resting, not on a manual break, and not committed to an unfinished match.
+ * Manual breaks are hard-locked and never selected; this pool is only queried
+ * when fewer than four players are waiting.
+ */
+export function buildRestingFallbackPlayersWhere(sessionId: string) {
+  return {
+    sessionId,
+    status: PlayerStatus.RESTING,
+    matchPlayers: {
+      none: { match: { status: { in: ACTIVE_MATCH_STATUSES } } },
+    },
+  };
+}
+
+/**
  * A rest is over when its timer is gone or has run out. Matches the `lte`
  * comparison promoteRestedPlayers uses, so a read and a later write agree on
  * the boundary instant.
@@ -92,22 +116,33 @@ export function isRestElapsed(
   restUntil: Date | null | undefined,
   now: Date,
 ): boolean {
-  return restUntil === null || restUntil === undefined ||
-    restUntil.getTime() <= now.getTime();
+  return (
+    restUntil === null ||
+    restUntil === undefined ||
+    restUntil.getTime() <= now.getTime()
+  );
 }
 
 /**
- * Presents a player's virtual status: a resting player whose cooldown has
- * elapsed reads back as WAITING with no rest timer. The database row is left
- * untouched, so this is safe for GET routes; physical promotion happens on the
- * write paths that actually need a WAITING row.
+ * Presents a player's virtual status: a resting player — or a manually broken
+ * player with a rest timer — whose cooldown has elapsed reads back as WAITING
+ * with no rest timer. An indefinite break (`restUntil: null`) never expires, so
+ * it always reads back as BREAK until an admin resumes it. The database row is
+ * left untouched, so this is safe for GET routes; physical promotion happens on
+ * the write paths that actually need a WAITING row.
  */
 export function applyEffectivePlayerStatus<
   T extends { status: PlayerStatus; restUntil: Date | null },
 >(player: T, now: Date): T {
+  const expired =
+    player.status === PlayerStatus.RESTING
+      ? isRestElapsed(player.restUntil, now)
+      : player.restUntil != null && player.restUntil.getTime() <= now.getTime();
+
   if (
-    player.status === PlayerStatus.RESTING &&
-    isRestElapsed(player.restUntil, now)
+    (player.status === PlayerStatus.RESTING ||
+      player.status === PlayerStatus.BREAK) &&
+    expired
   ) {
     return { ...player, status: PlayerStatus.WAITING, restUntil: null };
   }
@@ -135,10 +170,12 @@ export async function allocateMatchSequence(
 
 /**
  * Players resting after a match become available again once their cooldown has
- * elapsed. There is no scheduler, so physical writes happen lazily in the two
- * matchmaking transactions, where a WAITING row is actually required to
- * reserve. Read-only GETs do not promote; they present elapsed rests as
- * waiting via applyEffectivePlayerStatus instead.
+ * elapsed. Timed manual breaks expire the same way; an indefinite break
+ * (`restUntil: null`) is never promoted and waits for an admin resume. There is
+ * no scheduler, so physical writes happen lazily in the two matchmaking
+ * transactions, where a WAITING row is actually required to reserve. Read-only
+ * GETs do not promote; they present elapsed rests as waiting via
+ * applyEffectivePlayerStatus instead.
  */
 export async function promoteRestedPlayers(
   tx: Prisma.TransactionClient,
@@ -150,6 +187,15 @@ export async function promoteRestedPlayers(
       sessionId,
       status: PlayerStatus.RESTING,
       OR: [{ restUntil: null }, { restUntil: { lte: now } }],
+    },
+    data: { status: PlayerStatus.WAITING, restUntil: null },
+  });
+
+  await tx.sessionPlayer.updateMany({
+    where: {
+      sessionId,
+      status: PlayerStatus.BREAK,
+      restUntil: { not: null, lte: now },
     },
     data: { status: PlayerStatus.WAITING, restUntil: null },
   });

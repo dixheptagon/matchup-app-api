@@ -74,6 +74,7 @@ enum PlayerStatus {
   WAITING
   RESERVED
   RESTING
+  BREAK
   PLAYING
   LEFT
 }

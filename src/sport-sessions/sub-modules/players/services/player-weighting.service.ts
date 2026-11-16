@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type { SessionPlayer } from '../../../../../prisma/generated/prisma/client.js';
-import { LateJoinerPolicy } from '../../../../../prisma/generated/prisma/enums.js';
+import {
+  LateJoinerPolicy,
+  PlayerStatus,
+} from '../../../../../prisma/generated/prisma/enums.js';
 import { DEFAULT_CLUB_SETTINGS } from '../../../../club-settings/club-settings.constant.js';
 import {
-  COMPOSITION_WEIGHTS,
   LATE_JOINER_CATCHUP_BONUS,
   MIN_SESSION_PLAY_COUNT,
+  PRIORITY_WEIGHTS,
+  REST_FALLBACK_PENALTY,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type {
   SessionContext,
@@ -18,10 +22,13 @@ const NEUTRAL_SCORE = 0.5;
 /** Top of the 0..1 signal range, used to pin a player to the front. */
 const PRIORITY_SCORE = 1;
 
+/** Players drawn from the resting fallback pool sit in this tier. */
+const FALLBACK_TIER = 1;
+
 export type WeightablePlayer = Pick<
   SessionPlayer,
   'id' | 'playCount' | 'checkedInAt' | 'lastMatchFinishedAt'
->;
+> & { status?: PlayerStatus };
 
 export interface FairnessBreakdown {
   total: number;
@@ -29,6 +36,8 @@ export interface FairnessBreakdown {
   waitingScore: number;
   arrivalRatio: number;
   bucket: number;
+  /** 0 = primary (waiting) pool, 1 = resting fallback pool. */
+  tier: 0 | 1;
   weights: { equalPlay: number; waitingTime: number };
 }
 
@@ -48,8 +57,8 @@ export class PlayerWeightingService {
     const settings = this.resolveSettings(session);
     const policy = settings.lateJoinerPolicy;
     const weights = {
-      equalPlay: COMPOSITION_WEIGHTS[settings.equalPlayPriority],
-      waitingTime: COMPOSITION_WEIGHTS[settings.prioritizeWaitingPlayers],
+      equalPlay: PRIORITY_WEIGHTS[settings.equalPlayPriority],
+      waitingTime: PRIORITY_WEIGHTS[settings.prioritizeWaitingPlayers],
     };
 
     const rawCounts = players.map((player) => player.playCount ?? 0);
@@ -85,29 +94,60 @@ export class PlayerWeightingService {
       );
     });
 
-    const minTotal = Math.min(...totals);
-    const maxTotal = Math.max(...totals);
-    const range = maxTotal - minTotal;
-    const deadband = range > 0 ? (settings.fairnessThreshold / 100) * range : 0;
+    // Deadbands are computed per tier. The fallback penalty added later would
+    // otherwise stretch the global range and flatten every waiting player into
+    // a single bucket, erasing fairness ordering where it matters most.
+    const tiers = players.map(
+      (player): 0 | 1 =>
+        player.status === PlayerStatus.RESTING ? FALLBACK_TIER : 0,
+    );
 
-    const rows: WeightedPlayer<T>[] = players.map((player, index) => ({
-      ...player,
-      fairness: {
-        total: totals[index],
-        playCountScore: playScores[index],
-        waitingScore: waitScores[index],
-        arrivalRatio: arrivals[index],
-        bucket:
-          deadband > 0 ? Math.floor((totals[index] - minTotal) / deadband) : 0,
-        weights,
-      },
-    }));
+    const tierBounds = [0, 1].map((tier) => {
+      const tierTotals = totals.filter((_, index) => tiers[index] === tier);
+
+      if (tierTotals.length === 0) return { min: 0, deadband: 0 };
+
+      const min = Math.min(...tierTotals);
+      const range = Math.max(...tierTotals) - min;
+
+      return {
+        min,
+        deadband: range > 0 ? (settings.fairnessThreshold / 100) * range : 0,
+      };
+    });
+
+    const rows: WeightedPlayer<T>[] = players.map((player, index) => {
+      const tier = tiers[index];
+      const { min, deadband } = tierBounds[tier];
+
+      return {
+        ...player,
+        fairness: {
+          total:
+            totals[index] +
+            (tier === FALLBACK_TIER ? REST_FALLBACK_PENALTY : 0),
+          playCountScore: playScores[index],
+          waitingScore: waitScores[index],
+          arrivalRatio: arrivals[index],
+          bucket:
+            deadband > 0 ? Math.floor((totals[index] - min) / deadband) : 0,
+          tier,
+          weights,
+        },
+      };
+    });
 
     return rows.sort((a, b) => {
+      if (a.fairness.tier !== b.fairness.tier) {
+        return a.fairness.tier - b.fairness.tier;
+      }
+
+      const { deadband } = tierBounds[a.fairness.tier];
+
       if (deadband > 0) {
-        const bucketA = Math.floor((a.fairness.total - minTotal) / deadband);
-        const bucketB = Math.floor((b.fairness.total - minTotal) / deadband);
-        if (bucketA !== bucketB) return bucketB - bucketA;
+        if (a.fairness.bucket !== b.fairness.bucket) {
+          return b.fairness.bucket - a.fairness.bucket;
+        }
         return this.byCheckedInThenId(a, b);
       }
 

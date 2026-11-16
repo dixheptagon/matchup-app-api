@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class RestPlayerDto {
   /**
@@ -10,4 +10,12 @@ export class RestPlayerDto {
   @Min(1, { message: 'durationMinutes must be at least 1' })
   @Max(120, { message: 'durationMinutes must not exceed 120' })
   durationMinutes?: number;
+
+  /**
+   * Puts the player on an indefinite break that lasts until an admin resumes
+   * them. Takes precedence over durationMinutes, which is ignored.
+   */
+  @IsOptional()
+  @IsBoolean({ message: 'indefinite must be a boolean' })
+  indefinite?: boolean;
 }

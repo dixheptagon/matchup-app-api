@@ -46,6 +46,7 @@ describe('SessionMatchmakingService', () => {
   const eligibleRows = [
     {
       id: 1,
+      status: PlayerStatus.WAITING,
       playCount: 0,
       checkedInAt: new Date('2026-09-23T10:00:00.000Z'),
       lastMatchFinishedAt: null,
@@ -53,6 +54,7 @@ describe('SessionMatchmakingService', () => {
     },
     {
       id: 2,
+      status: PlayerStatus.WAITING,
       playCount: 0,
       checkedInAt: new Date('2026-09-23T10:00:00.000Z'),
       lastMatchFinishedAt: null,
@@ -60,6 +62,7 @@ describe('SessionMatchmakingService', () => {
     },
     {
       id: 3,
+      status: PlayerStatus.WAITING,
       playCount: 0,
       checkedInAt: new Date('2026-09-23T10:00:00.000Z'),
       lastMatchFinishedAt: null,
@@ -67,12 +70,20 @@ describe('SessionMatchmakingService', () => {
     },
     {
       id: 4,
+      status: PlayerStatus.WAITING,
       playCount: 0,
       checkedInAt: new Date('2026-09-23T10:00:00.000Z'),
       lastMatchFinishedAt: null,
       clubMember: { skillLevel: SkillLevel.BEGINNER, gender: null },
     },
   ];
+
+  const restingRow = (id: number) => ({
+    ...eligibleRows[id - 1],
+    id,
+    status: PlayerStatus.RESTING,
+    restUntil: new Date('2026-09-23T10:55:00.000Z'),
+  });
 
   beforeEach(async () => {
     mockPrisma = {
@@ -129,14 +140,66 @@ describe('SessionMatchmakingService', () => {
   describe('autoMatch', () => {
     it('rejects when there are not enough waiting players', async () => {
       mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
-      mockPrisma.sessionPlayer.findMany.mockResolvedValue(
-        eligibleRows.slice(0, 3),
-      );
+      mockPrisma.sessionPlayer.findMany
+        .mockResolvedValueOnce(eligibleRows.slice(0, 3))
+        .mockResolvedValueOnce([]);
 
       await expect(service.autoMatch(mockSession)).rejects.toThrow(
-        BadRequestException,
+        /3 waiting, 0 resting/,
       );
       expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
+    });
+
+    it('does not query resting players when enough are waiting', async () => {
+      primeAutoPath();
+
+      await service.autoMatch(mockSession);
+
+      expect(mockPrisma.sessionPlayer.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('draws resting players from a fallback pool when waiting runs short', async () => {
+      mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 4 });
+      mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-1' });
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+      mockPrisma.sessionPlayer.findMany
+        .mockResolvedValueOnce(eligibleRows.slice(0, 3))
+        .mockResolvedValueOnce([restingRow(4)]);
+
+      await service.autoMatch(mockSession);
+
+      expect(mockPrisma.sessionPlayer.findMany).toHaveBeenCalledTimes(2);
+
+      const fallbackWhere =
+        mockPrisma.sessionPlayer.findMany.mock.calls[1][0].where;
+      expect(fallbackWhere.sessionId).toBe('session-1');
+      expect(fallbackWhere.status).toBe(PlayerStatus.RESTING);
+      expect(fallbackWhere.matchPlayers.none).toBeDefined();
+    });
+
+    it('ranks resting fallback players below waiting players', async () => {
+      mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
+      mockPrisma.sessionPlayer.updateMany.mockResolvedValue({ count: 4 });
+      mockPrisma.sessionMatch.create.mockResolvedValue({ id: 'match-1' });
+      mockPrisma.sessionMatch.findUnique.mockResolvedValue({ id: 'match-1' });
+      mockPrisma.sessionPlayer.findMany
+        .mockResolvedValueOnce([
+          { ...eligibleRows[0], id: 1, playCount: 5 },
+          { ...eligibleRows[1], id: 2, playCount: 5 },
+        ])
+        .mockResolvedValueOnce([
+          { ...restingRow(3), playCount: 0 },
+          { ...restingRow(4), playCount: 0 },
+        ]);
+
+      await service.autoMatch(mockSession);
+
+      const ranked = composition.compose.mock.calls[0][0];
+      expect(ranked.map((p) => p.id)).toEqual([1, 2, 3, 4]);
+      expect(ranked[0].fairness.tier).toBe(0);
+      expect(ranked[2].fairness.tier).toBe(1);
+      expect(ranked[2].fairness.total).toBeLessThan(0);
     });
 
     it('creates a court-less QUEUED match with no sequence', async () => {
@@ -217,9 +280,9 @@ describe('SessionMatchmakingService', () => {
       expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
         where: {
           id: { in: [1, 2, 3, 4] },
-          status: PlayerStatus.WAITING,
+          status: { in: [PlayerStatus.WAITING, PlayerStatus.RESTING] },
         },
-        data: { status: PlayerStatus.RESERVED },
+        data: { status: PlayerStatus.RESERVED, restUntil: null },
       });
     });
 

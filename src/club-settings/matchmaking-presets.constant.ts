@@ -56,12 +56,11 @@ export const MATCHMAKING_PRESETS: Record<
  */
 export function expandMatchmakingPreset<
   T extends { preset?: MatchmakingPreset },
->(
-  dto: T,
-): Omit<T, 'preset'> & Partial<MatchmakingPresetValues> {
+>(dto: T): Omit<T, 'preset'> & Partial<MatchmakingPresetValues> {
   const { preset, ...rest } = dto;
 
-  if (!preset) return rest as Omit<T, 'preset'> & Partial<MatchmakingPresetValues>;
+  if (!preset)
+    return rest as Omit<T, 'preset'> & Partial<MatchmakingPresetValues>;
 
   const explicit = Object.fromEntries(
     Object.entries(rest).filter(([, value]) => value !== undefined),

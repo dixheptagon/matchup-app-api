@@ -10,6 +10,7 @@ import { DEFAULT_CLUB_SETTINGS } from '../../../../club-settings/club-settings.c
 import {
   MILLISECONDS_PER_MINUTE,
   RESTABLE_PLAYER_STATUSES,
+  RESUMABLE_PLAYER_STATUSES,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import { RestPlayerDto } from '../dto/rest-player.dto.js';
@@ -19,8 +20,13 @@ export class SessionPlayerRestService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Puts a player on rest manually: either an unused WAITING player who asked
-   * for a break, or an already-resting player whose cooldown is being extended.
+   * Puts a player on a manual break: either an unused WAITING player who asked
+   * for a break, or a resting/broken player whose break is being extended.
+   *
+   * A manual break is stored as BREAK, distinct from the RESTING cooldown the
+   * system hands out after a match. A break runs for the requested duration and
+   * then promotes itself back to waiting, unless it is indefinite
+   * (`restUntil: null`), in which case it lasts until an admin resumes it.
    *
    * The read only produces a friendly message. The guarded updateMany is what
    * keeps a player who was reserved, playing, or checked out by a concurrent
@@ -43,41 +49,36 @@ export class SessionPlayerRestService {
       throw new BadRequestException(`Cannot rest a ${player.status} player`);
     }
 
+    if (dto.indefinite) {
+      return this.runBreakUpdate(session, player.id, {
+        status: PlayerStatus.BREAK,
+        restUntil: null,
+      });
+    }
+
     const minutes = await this.resolveDuration(session.id, dto);
 
     const now = Date.now();
-    const baseTime =
-      player.status === PlayerStatus.RESTING &&
+    const extendable =
+      (player.status === PlayerStatus.RESTING ||
+        player.status === PlayerStatus.BREAK) &&
       player.restUntil &&
-      player.restUntil.getTime() > now
-        ? player.restUntil.getTime()
-        : now;
+      player.restUntil.getTime() > now;
+    const baseTime = extendable ? player.restUntil!.getTime() : now;
 
     const restUntil = new Date(baseTime + minutes * MILLISECONDS_PER_MINUTE);
 
-    const update = await this.prisma.sessionPlayer.updateMany({
-      where: {
-        id: player.id,
-        sessionId: session.id,
-        status: { in: RESTABLE_PLAYER_STATUSES },
-      },
-      data: { status: PlayerStatus.RESTING, restUntil },
-    });
-
-    if (update.count === 0) {
-      throw new ConflictException('Player status changed by another request');
-    }
-
-    return this.prisma.sessionPlayer.findUnique({
-      where: { id: player.id },
-      include: { clubMember: true },
+    return this.runBreakUpdate(session, player.id, {
+      status: PlayerStatus.BREAK,
+      restUntil,
     });
   }
 
   /**
-   * Ends a rest early and returns the player to the waiting pool. The lazy
-   * promoteRestedPlayers check covers the same transition at the next
-   * matchmaking call, but only once restUntil has passed.
+   * Ends a rest or break early and returns the player to the waiting pool. The
+   * lazy promoteRestedPlayers check covers the same transition at the next
+   * matchmaking call, but only once restUntil has passed — which an indefinite
+   * break never does on its own.
    */
   async resumePlayer(session: SessionContext, sessionPlayerId: number) {
     const player = await this.prisma.sessionPlayer.findFirst({
@@ -88,17 +89,37 @@ export class SessionPlayerRestService {
       throw new NotFoundException('Session player not found');
     }
 
-    if (player.status !== PlayerStatus.RESTING) {
-      throw new BadRequestException(`Player is not resting (${player.status})`);
+    if (!RESUMABLE_PLAYER_STATUSES.includes(player.status)) {
+      throw new BadRequestException(
+        `Player is not resting or on break (${player.status})`,
+      );
     }
 
+    return this.runBreakUpdate(
+      session,
+      player.id,
+      { status: PlayerStatus.WAITING, restUntil: null },
+      RESUMABLE_PLAYER_STATUSES,
+    );
+  }
+
+  /**
+   * Guarded write shared by rest and resume. The status filter inside the
+   * updateMany keeps a concurrent state change from being overwritten.
+   */
+  private async runBreakUpdate(
+    session: SessionContext,
+    playerId: number,
+    data: { status: PlayerStatus; restUntil: Date | null },
+    allowedStatuses: PlayerStatus[] = RESTABLE_PLAYER_STATUSES,
+  ) {
     const update = await this.prisma.sessionPlayer.updateMany({
       where: {
-        id: player.id,
+        id: playerId,
         sessionId: session.id,
-        status: PlayerStatus.RESTING,
+        status: { in: allowedStatuses },
       },
-      data: { status: PlayerStatus.WAITING, restUntil: null },
+      data,
     });
 
     if (update.count === 0) {
@@ -106,7 +127,7 @@ export class SessionPlayerRestService {
     }
 
     return this.prisma.sessionPlayer.findUnique({
-      where: { id: player.id },
+      where: { id: playerId },
       include: { clubMember: true },
     });
   }

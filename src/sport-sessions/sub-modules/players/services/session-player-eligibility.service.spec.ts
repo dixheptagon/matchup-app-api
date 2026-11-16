@@ -75,6 +75,29 @@ describe('SessionPlayerEligibilityService', () => {
       });
     });
 
+    it('treats an elapsed timed break as waiting in the query', async () => {
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(0);
+
+      await service.getEligiblePlayers(mockSession, NOW);
+
+      const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
+      expect(args.where.OR[2]).toEqual({
+        status: PlayerStatus.BREAK,
+        restUntil: { not: null, lte: NOW },
+      });
+    });
+
+    it('excludes an indefinite break from the query', async () => {
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(0);
+
+      await service.getEligiblePlayers(mockSession, NOW);
+
+      const args = mockPrisma.sessionPlayer.findMany.mock.calls[0][0];
+      expect(args.where.OR[2].restUntil.not).toBeNull();
+    });
+
     it('should exclude players committed to an unfinished match', async () => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([]);
       mockPrisma.sessionPlayer.count.mockResolvedValue(0);
@@ -161,6 +184,60 @@ describe('SessionPlayerEligibilityService', () => {
           id: 9,
           status: PlayerStatus.RESTING,
           restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+      );
+    });
+
+    it('presents an elapsed timed break as waiting', async () => {
+      const NOW = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        {
+          id: 9,
+          status: PlayerStatus.BREAK,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+          playCount: 1,
+          checkedInAt: sessionStart,
+          lastMatchFinishedAt: sessionStart,
+          clubMember: {},
+          _count: { matchPlayers: 0 },
+        },
+      ]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(1);
+
+      const result = await service.getEligiblePlayers(mockSession, NOW);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 9,
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        }),
+      );
+    });
+
+    it('keeps an indefinite break as break', async () => {
+      const NOW = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        {
+          id: 9,
+          status: PlayerStatus.BREAK,
+          restUntil: null,
+          playCount: 1,
+          checkedInAt: sessionStart,
+          lastMatchFinishedAt: sessionStart,
+          clubMember: {},
+          _count: { matchPlayers: 0 },
+        },
+      ]);
+      mockPrisma.sessionPlayer.count.mockResolvedValue(1);
+
+      const result = await service.getEligiblePlayers(mockSession, NOW);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 9,
+          status: PlayerStatus.BREAK,
+          restUntil: null,
         }),
       );
     });

@@ -182,6 +182,44 @@ describe('SessionStatsService', () => {
       );
     });
 
+    it('shows an elapsed timed break as waiting', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({
+          id: 1,
+          status: PlayerStatus.BREAK,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+        }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 1,
+          status: PlayerStatus.WAITING,
+          restUntil: null,
+        }),
+      );
+    });
+
+    it('keeps an indefinite break as break', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({ id: 1, status: PlayerStatus.BREAK, restUntil: null }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({
+          id: 1,
+          status: PlayerStatus.BREAK,
+          restUntil: null,
+        }),
+      );
+    });
+
     it('sorts an elapsed rest among the waiting players via status', async () => {
       const now = new Date('2026-10-01T12:00:00.000Z');
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([
@@ -226,6 +264,43 @@ describe('SessionStatsService', () => {
         now,
       );
 
+      expect(ids(result.data)).toEqual([3, 1, 2]);
+    });
+
+    it('sorts a break between resting and waiting players', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({ id: 1, status: PlayerStatus.PLAYING }),
+        rosterPlayer({
+          id: 2,
+          status: PlayerStatus.RESTING,
+          restUntil: new Date('2026-10-01T20:00:00.000Z'),
+        }),
+        rosterPlayer({ id: 3, status: PlayerStatus.BREAK, restUntil: null }),
+        rosterPlayer({ id: 4, status: PlayerStatus.WAITING }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      expect(ids(result.data)).toEqual([1, 2, 3, 4]);
+    });
+
+    it('sorts an elapsed timed break among the waiting players', async () => {
+      const now = new Date('2026-10-01T12:00:00.000Z');
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        rosterPlayer({
+          id: 1,
+          status: PlayerStatus.BREAK,
+          restUntil: new Date('2026-10-01T11:00:00.000Z'),
+        }),
+        rosterPlayer({ id: 2, status: PlayerStatus.WAITING }),
+        rosterPlayer({ id: 3, status: PlayerStatus.BREAK, restUntil: null }),
+      ]);
+
+      const result = await service.getRoster(mockSession, query(), now);
+
+      // The expired break reads as WAITING, so only the indefinite break
+      // still occupies the BREAK slot, which sorts ahead of WAITING.
       expect(ids(result.data)).toEqual([3, 1, 2]);
     });
 

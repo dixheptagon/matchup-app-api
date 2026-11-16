@@ -15,6 +15,7 @@ import {
 import {
   ACTIVE_MATCH_STATUSES,
   buildEligiblePlayersWhere,
+  buildRestingFallbackPlayersWhere,
   promoteRestedPlayers,
 } from '../../../shared/helpers/sport-sessions.helper.js';
 import {
@@ -52,18 +53,31 @@ export class SessionMatchmakingService {
       // scheduler to move them back once their rest has elapsed.
       await promoteRestedPlayers(tx, session.id);
 
-      const eligible = await tx.sessionPlayer.findMany({
+      const waiting = await tx.sessionPlayer.findMany({
         where: buildEligiblePlayersWhere(session.id),
         include: { clubMember: true },
       });
 
-      if (eligible.length < PLAYERS_PER_MATCH) {
+      let pool = waiting;
+
+      // Cooldown players are a fallback pool: only dipped into when the
+      // waiting pool cannot fill a match on its own. Breaks stay hard-locked.
+      if (waiting.length < PLAYERS_PER_MATCH) {
+        const resting = await tx.sessionPlayer.findMany({
+          where: buildRestingFallbackPlayersWhere(session.id),
+          include: { clubMember: true },
+        });
+
+        pool = [...waiting, ...resting];
+      }
+
+      if (pool.length < PLAYERS_PER_MATCH) {
         throw new BadRequestException(
-          `At least ${PLAYERS_PER_MATCH} waiting players are required to auto-match`,
+          `At least ${PLAYERS_PER_MATCH} players are required to auto-match (${waiting.length} waiting, ${pool.length - waiting.length} resting)`,
         );
       }
 
-      const ranked = this.playerWeighting.weight(eligible, {
+      const ranked = this.playerWeighting.weight(pool, {
         ...session,
         sessionSettings: settings,
       });
@@ -205,13 +219,18 @@ export class SessionMatchmakingService {
   }
 
   /**
-   * Compare-and-set on the player status. Any player already claimed by another
-   * request yields a short count, which aborts the whole transaction.
+   * Compare-and-set on the player status. Waiting players and fallback-pool
+   * cooldown players may both be reserved; restUntil is cleared so a cancelled
+   * match does not hand the player a stale cooldown. Any player already claimed
+   * by another request yields a short count, which aborts the whole transaction.
    */
   private async reservePlayers(tx: Tx, playerIds: number[]) {
     const reservation = await tx.sessionPlayer.updateMany({
-      where: { id: { in: playerIds }, status: PlayerStatus.WAITING },
-      data: { status: PlayerStatus.RESERVED },
+      where: {
+        id: { in: playerIds },
+        status: { in: [PlayerStatus.WAITING, PlayerStatus.RESTING] },
+      },
+      data: { status: PlayerStatus.RESERVED, restUntil: null },
     });
 
     if (reservation.count !== playerIds.length) {
@@ -234,11 +253,14 @@ export class SessionMatchmakingService {
   ): Promise<T> {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
-        SELECT pg_advisory_xact_lock(
-          ${MATCHMAKING_LOCK_NAMESPACE}::int,
-          hashtext(${sessionId})
-        )
-      `;
+    SELECT 1 AS locked
+    FROM (
+      SELECT pg_advisory_xact_lock(
+        ${MATCHMAKING_LOCK_NAMESPACE}::int,
+        hashtext(${sessionId})
+      )
+    ) AS lock
+  `;
       return fn(tx);
     });
   }
