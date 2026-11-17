@@ -75,6 +75,25 @@ export const RESUMABLE_PLAYER_STATUSES: PlayerStatus[] = [
 ];
 
 /**
+ * Bench states shown in the manual match picker: waiting players, cooldown
+ * players (even before their rest elapses). Players who
+ * are absent, checked out, or committed to an unfinished match are excluded.
+ */
+export const BENCH_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.WAITING,
+  PlayerStatus.RESTING,
+];
+
+/**
+ * Statuses a manual match may draw from. A resting player can be picked before
+ * the cooldown elapses; a break must be resumed first.
+ */
+export const MANUALLY_SELECTABLE_PLAYER_STATUSES: PlayerStatus[] = [
+  PlayerStatus.WAITING,
+  PlayerStatus.RESTING,
+];
+
+/**
  * Where a match's players sit once it has finished: on cooldown, or straight
  * back to waiting. A player who checked out mid-match is in neither state, so
  * a match containing one cannot be undone.

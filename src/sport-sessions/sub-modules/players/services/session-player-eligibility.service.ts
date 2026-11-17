@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../config/prisma/prisma.service.js';
+import { PlayerStatus } from '../../../../../prisma/generated/prisma/enums.js';
+import { BENCH_PLAYER_STATUSES } from '../../../shared/constants/sport-sessions.constant.js';
 import {
-  applyEffectivePlayerStatus,
-  buildEligiblePlayersWhere,
+  buildBenchPlayersWhere,
+  promoteRestedPlayers,
 } from '../../../shared/helpers/sport-sessions.helper.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
 import { PlayerWeightingService } from './player-weighting.service.js';
@@ -14,33 +16,70 @@ export class SessionPlayerEligibilityService {
     private readonly playerWeighting: PlayerWeightingService,
   ) {}
 
+  /**
+   * The manual match picker's bench. Elapsed rests and timed breaks are
+   * promoted first, so the returned status is the one a reservation would see.
+   * WAITING keeps the fairness ranking, resting players follow by earliest
+   * rest, and players on break sit at the bottom (indefinite breaks last).
+   */
   async getEligiblePlayers(session: SessionContext, now: Date = new Date()) {
-    const whereCondition = buildEligiblePlayersWhere(session.id, now);
+    const players = await this.prisma.$transaction(async (tx) => {
+      await promoteRestedPlayers(tx, session.id, now);
 
-    const [players, totalCount] = await this.prisma.$transaction([
-      this.prisma.sessionPlayer.findMany({
-        where: whereCondition,
-        include: {
-          clubMember: true,
-        },
+      return tx.sessionPlayer.findMany({
+        where: buildBenchPlayersWhere(session.id),
+        include: { clubMember: true },
         orderBy: [{ checkedInAt: 'asc' }, { id: 'asc' }],
-      }),
-      this.prisma.sessionPlayer.count({
-        where: whereCondition,
-      }),
-    ]);
+      });
+    });
+
+    console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+    console.log(players);
+
+    // Weighting only decides the order of the waiting group; the breakdown is
+    // not part of this payload.
+    const rank = new Map(
+      this.playerWeighting
+        .weight(players, session, now)
+        .map((player, index) => [player.id, index] as const),
+    );
+
+    const data = [...players]
+      .sort((a, b) => {
+        const group = this.benchGroup(a.status) - this.benchGroup(b.status);
+        if (group !== 0) return group;
+
+        if (a.status === PlayerStatus.WAITING) {
+          return (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0) || a.id - b.id;
+        }
+
+        return this.compareRestUntil(a.restUntil, b.restUntil) || a.id - b.id;
+      })
+      .map((player) => ({
+        ...player,
+        isReady: player.status === PlayerStatus.WAITING,
+      }));
 
     return {
-      // Elapsed rests are presented as the waiting state they will get on the
-      // next write, without this GET mutating anything.
-      data: this.playerWeighting.weight(
-        players.map((player) => applyEffectivePlayerStatus(player, now)),
-        session,
-      ),
+      data,
       meta: {
-        total: totalCount,
+        total: data.length,
         sessionId: session.id,
       },
     };
+  }
+
+  /** Waiting first, then resting, then break. */
+  private benchGroup(status: PlayerStatus): number {
+    return BENCH_PLAYER_STATUSES.indexOf(status);
+  }
+
+  /** Ascending rest end, with an indefinite (null) rest last. */
+  private compareRestUntil(a: Date | null, b: Date | null): number {
+    if (a === null || b === null) {
+      return a === b ? 0 : a === null ? 1 : -1;
+    }
+
+    return a.getTime() - b.getTime();
   }
 }

@@ -138,6 +138,14 @@ describe('SessionMatchmakingService', () => {
   }
 
   describe('autoMatch', () => {
+    type RankedPlayer = {
+      id: number;
+      fairness: {
+        tier: number;
+        total: number;
+      };
+    };
+
     it('rejects when there are not enough waiting players', async () => {
       mockPrisma.sessionSettings.findUnique.mockResolvedValue(settings);
       mockPrisma.sessionPlayer.findMany
@@ -195,7 +203,7 @@ describe('SessionMatchmakingService', () => {
 
       await service.autoMatch(mockSession);
 
-      const ranked = composition.compose.mock.calls[0][0];
+      const ranked = composition.compose.mock.calls[0][0] as RankedPlayer[];
       expect(ranked.map((p) => p.id)).toEqual([1, 2, 3, 4]);
       expect(ranked[0].fairness.tier).toBe(0);
       expect(ranked[2].fairness.tier).toBe(1);
@@ -492,10 +500,16 @@ describe('SessionMatchmakingService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('rejects players that are not waiting', async () => {
+    it.each([
+      PlayerStatus.BREAK,
+      PlayerStatus.PLAYING,
+      PlayerStatus.RESERVED,
+      PlayerStatus.NOT_ARRIVED,
+      PlayerStatus.LEFT,
+    ])('rejects a match containing a %s player', async (status) => {
       mockPrisma.sessionPlayer.findMany.mockResolvedValue([
         { id: 1, status: PlayerStatus.WAITING },
-        { id: 2, status: PlayerStatus.PLAYING },
+        { id: 2, status },
         { id: 3, status: PlayerStatus.WAITING },
         { id: 4, status: PlayerStatus.WAITING },
       ]);
@@ -506,6 +520,32 @@ describe('SessionMatchmakingService', () => {
           teamB: [3, 4],
         }),
       ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.sessionMatch.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts resting players before their cooldown elapses', async () => {
+      mockPrisma.sessionPlayer.findMany.mockResolvedValue([
+        { id: 1, status: PlayerStatus.WAITING },
+        { id: 2, status: PlayerStatus.RESTING },
+        { id: 3, status: PlayerStatus.WAITING },
+        { id: 4, status: PlayerStatus.RESTING },
+      ]);
+
+      await service.createManualMatch(mockSession, {
+        teamA: [1, 2],
+        teamB: [3, 4],
+      });
+
+      expect(mockPrisma.sessionPlayer.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [1, 2, 3, 4] },
+          status: {
+            in: [PlayerStatus.WAITING, PlayerStatus.RESTING],
+          },
+        },
+        data: { status: PlayerStatus.RESERVED, restUntil: null },
+      });
+      expect(mockPrisma.sessionMatch.create).toHaveBeenCalled();
     });
 
     it('rejects players already committed to an unfinished match', async () => {

@@ -1,6 +1,7 @@
 import {
   allocateMatchSequence,
   applyEffectivePlayerStatus,
+  buildBenchPlayersWhere,
   buildEligiblePlayersWhere,
   buildRestingFallbackPlayersWhere,
   promoteRestedPlayers,
@@ -79,6 +80,35 @@ describe('buildRestingFallbackPlayersWhere', () => {
 
     expect(where.sessionId).toBe('session-1');
     expect(where.status).toBe(PlayerStatus.RESTING);
+    expect(where.matchPlayers.none.match.status.in).not.toContain('FINISHED');
+  });
+});
+
+describe('buildBenchPlayersWhere', () => {
+  it('selects waiting, resting, and break players', () => {
+    const where = buildBenchPlayersWhere('session-1');
+
+    expect(where.sessionId).toBe('session-1');
+    expect(where.status.in).toEqual([
+      PlayerStatus.WAITING,
+      PlayerStatus.RESTING,
+      PlayerStatus.BREAK,
+    ]);
+  });
+
+  it('leaves out absent, checked-out, and live players', () => {
+    const where = buildBenchPlayersWhere('session-1');
+
+    expect(where.status.in).not.toContain(PlayerStatus.NOT_ARRIVED);
+    expect(where.status.in).not.toContain(PlayerStatus.LEFT);
+    expect(where.status.in).not.toContain(PlayerStatus.PLAYING);
+    expect(where.status.in).not.toContain(PlayerStatus.RESERVED);
+  });
+
+  it('always excludes players committed to an unfinished match', () => {
+    const where = buildBenchPlayersWhere('session-1');
+
+    expect(where.matchPlayers.none.match.status.in).toContain('PLAYING');
     expect(where.matchPlayers.none.match.status.in).not.toContain('FINISHED');
   });
 });

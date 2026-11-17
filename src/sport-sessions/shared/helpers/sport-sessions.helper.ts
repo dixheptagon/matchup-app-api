@@ -9,7 +9,10 @@ import {
   SessionsType,
   TeamGroup,
 } from '../../../../prisma/generated/prisma/enums.js';
-import { ACTIVE_EDITABLE_SETTINGS } from '../constants/sport-sessions.constant.js';
+import {
+  ACTIVE_EDITABLE_SETTINGS,
+  BENCH_PLAYER_STATUSES,
+} from '../constants/sport-sessions.constant.js';
 
 export type SessionSettingsFields = Omit<
   ClubSettings,
@@ -108,6 +111,23 @@ export function buildRestingFallbackPlayersWhere(sessionId: string) {
 }
 
 /**
+ * The bench the manual match picker works from: waiting players, cooldown
+ * players (even while their rest is still running).
+ * Absent, checked-out, and already-committed players are excluded. Callers that
+ * need the true status should promote elapsed rests first, so they come back as
+ * WAITING rather than as an expired RESTING/BREAK row.
+ */
+export function buildBenchPlayersWhere(sessionId: string) {
+  return {
+    sessionId,
+    status: { in: BENCH_PLAYER_STATUSES },
+    matchPlayers: {
+      none: { match: { status: { in: ACTIVE_MATCH_STATUSES } } },
+    },
+  };
+}
+
+/**
  * A rest is over when its timer is gone or has run out. Matches the `lte`
  * comparison promoteRestedPlayers uses, so a read and a later write agree on
  * the boundary instant.
@@ -172,9 +192,10 @@ export async function allocateMatchSequence(
  * Players resting after a match become available again once their cooldown has
  * elapsed. Timed manual breaks expire the same way; an indefinite break
  * (`restUntil: null`) is never promoted and waits for an admin resume. There is
- * no scheduler, so physical writes happen lazily in the two matchmaking
- * transactions, where a WAITING row is actually required to reserve. Read-only
- * GETs do not promote; they present elapsed rests as waiting via
+ * no scheduler, so physical writes happen lazily: in the matchmaking
+ * transactions, where a WAITING row is required to reserve, and in the
+ * eligible-players GET, so the picker shows the true status. Roster reads stay
+ * side-effect free and present elapsed rests as waiting via
  * applyEffectivePlayerStatus instead.
  */
 export async function promoteRestedPlayers(

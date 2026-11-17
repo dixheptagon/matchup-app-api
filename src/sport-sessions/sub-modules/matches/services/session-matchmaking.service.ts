@@ -22,6 +22,7 @@ import {
   MATCH_DETAIL_INCLUDE,
   MATCHMAKING_LOCK_NAMESPACE,
   COMPOSITION_WEIGHTS,
+  MANUALLY_SELECTABLE_PLAYER_STATUSES,
   PLAYERS_PER_MATCH,
 } from '../../../shared/constants/sport-sessions.constant.js';
 import type { SessionContext } from '../../../shared/types/sport-sessions.types.js';
@@ -144,12 +145,14 @@ export class SessionMatchmakingService {
       throw new NotFoundException('One or more session players were not found');
     }
 
-    const notWaiting = players.filter(
-      (player) => player.status !== PlayerStatus.WAITING,
+    // A resting player may be picked before the cooldown elapses; a break has
+    // to be resumed first, and absent/checked-out players are not available.
+    const unavailable = players.filter(
+      (player) => !MANUALLY_SELECTABLE_PLAYER_STATUSES.includes(player.status),
     );
 
-    if (notWaiting.length > 0) {
-      const details = notWaiting
+    if (unavailable.length > 0) {
+      const details = unavailable
         .map((player) => {
           const name = player.clubMember?.displayName ?? `Player ${player.id}`;
           return `${name} (Status: ${player.status})`;
@@ -157,7 +160,7 @@ export class SessionMatchmakingService {
         .join(', ');
 
       throw new BadRequestException(
-        `Cannot match players who are not in a waiting state: ${details}`,
+        `Cannot match players who are not available (waiting or resting): ${details}`,
       );
     }
 
