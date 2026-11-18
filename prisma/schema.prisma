@@ -197,12 +197,12 @@ model ClubSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  equalPlayPriority        PriorityLevel   @default(MEDIUM)
-  balancedTeams            PriorityLevel   @default(HIGH)
-  skillBandPriority        PriorityLevel   @default(LOW)
-  partnerVariety           PriorityLevel   @default(MEDIUM)
-  opponentVariety          PriorityLevel   @default(MEDIUM)
-  prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
+  equalPlayPriority        PriorityLevel @default(MEDIUM)
+  balancedTeams            PriorityLevel @default(HIGH)
+  skillBandPriority        PriorityLevel @default(LOW)
+  partnerVariety           PriorityLevel @default(MEDIUM)
+  opponentVariety          PriorityLevel @default(MEDIUM)
+  prioritizeWaitingPlayers PriorityLevel @default(HIGH)
   minimumRestTime          Int?
 
   genderPreference GenderPreferenceType?
@@ -255,12 +255,12 @@ model SessionSettings {
   queueDepth           Int?
 
   // MATCHMAKING
-  equalPlayPriority        PriorityLevel   @default(MEDIUM)
-  balancedTeams            PriorityLevel   @default(HIGH)
-  skillBandPriority        PriorityLevel   @default(LOW)
-  partnerVariety           PriorityLevel   @default(MEDIUM)
-  opponentVariety          PriorityLevel   @default(MEDIUM)
-  prioritizeWaitingPlayers PriorityLevel   @default(HIGH)
+  equalPlayPriority        PriorityLevel @default(MEDIUM)
+  balancedTeams            PriorityLevel @default(HIGH)
+  skillBandPriority        PriorityLevel @default(LOW)
+  partnerVariety           PriorityLevel @default(MEDIUM)
+  opponentVariety          PriorityLevel @default(MEDIUM)
+  prioritizeWaitingPlayers PriorityLevel @default(HIGH)
   minimumRestTime          Int?
 
   genderPreference GenderPreferenceType?

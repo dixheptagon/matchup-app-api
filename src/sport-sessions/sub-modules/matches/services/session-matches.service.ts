@@ -242,9 +242,7 @@ export class SessionMatchesService {
         }
 
         if (!STARTABLE_MATCH_STATUSES.includes(match.status)) {
-          throw new BadRequestException(
-            `Cannot start a ${match.status} match`,
-          );
+          throw new BadRequestException(`Cannot start a ${match.status} match`);
         }
 
         const sequence = await allocateMatchSequence(tx, session.id);
@@ -327,9 +325,7 @@ export class SessionMatchesService {
       }
 
       if (!SCORABLE_MATCH_STATUSES.includes(match.status)) {
-        throw new BadRequestException(
-          `Cannot score a ${match.status} match`,
-        );
+        throw new BadRequestException(`Cannot score a ${match.status} match`);
       }
 
       const settings = await tx.sessionSettings.findUnique({
@@ -459,12 +455,10 @@ export class SessionMatchesService {
         match: await this.findMatchDetail(tx, match.id),
         resolution: {
           winningTeam,
-          scoreTeamA: settings?.trackMatchScore ?? true
-            ? match.scoreTeamA
-            : null,
-          scoreTeamB: settings?.trackMatchScore ?? true
-            ? match.scoreTeamB
-            : null,
+          scoreTeamA:
+            (settings?.trackMatchScore ?? true) ? match.scoreTeamA : null,
+          scoreTeamB:
+            (settings?.trackMatchScore ?? true) ? match.scoreTeamB : null,
           players: match.players,
           notes: dto.notes,
           leaderBoardMode: settings?.leaderBoardMode ?? ScoringType.OFF,
@@ -490,7 +484,10 @@ export class SessionMatchesService {
     });
   }
 
-  private async releaseCourt(tx: Tx, sessionCourtId: number | null | undefined) {
+  private async releaseCourt(
+    tx: Tx,
+    sessionCourtId: number | null | undefined,
+  ) {
     if (sessionCourtId === null || sessionCourtId === undefined) return;
 
     await tx.sessionCourt.update({

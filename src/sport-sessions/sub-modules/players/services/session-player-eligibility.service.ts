@@ -33,9 +33,6 @@ export class SessionPlayerEligibilityService {
       });
     });
 
-    console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-    console.log(players);
-
     // Weighting only decides the order of the waiting group; the breakdown is
     // not part of this payload.
     const rank = new Map(
